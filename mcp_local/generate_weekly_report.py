@@ -304,6 +304,34 @@ def generate_pdf(analysis):
                 hAlign="CENTER",
             )
         )
+    # -------- TOP 5 ALARMS --------
+    elements.append(
+    Paragraph("5. Top 5 Alarms Triggered", styles["SectionHeader"])
+)
+
+    alarm_table_data = [["Alarm Name", "Count"]]
+
+    if not analysis["top_alarms"].empty:
+        for _, row in analysis["top_alarms"].iterrows():
+            alarm_table_data.append(
+            [row["Alarm Name"], row["Count"]]
+        )
+    else:
+        alarm_table_data.append(["No alarms found", "0"])
+
+    elements.append(
+    Table(
+        alarm_table_data,
+        colWidths=[380, 60],
+        style=[
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ],
+    )
+)
+
 
     pdf.build(elements)
 
