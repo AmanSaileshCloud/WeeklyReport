@@ -28,6 +28,7 @@ REQUIRED_COLUMNS = [
     "Ticket Id",
     "Ticket Type",
     "Created Time (Ticket)",
+    "Subject",
     "Status (Ticket)",
     "SLA Violation Type",
     "Priority (Ticket)",
@@ -270,17 +271,28 @@ def generate_pdf(analysis):
     pdf.build(elements)
 
 
-# -----------------------------
-# MAIN
-# -----------------------------
-def main():
+def generate_weekly_report():
     df = load_data()
     df = prepare_weekly_data(df)
     analysis = analyze_data(df)
     generate_graphs(analysis)
     generate_pdf(analysis)
+
+    return {
+        "total_tickets": analysis["total_tickets"],
+        "sla_violated": analysis["sla_violated"],
+        "output_pdf": OUTPUT_PDF_FILE,
+    }
+# -----------------------------
+# MAIN
+# -----------------------------
+def main():
+    generate_weekly_report()
     logging.info("Weekly report generated successfully")
 
 
 if __name__ == "__main__":
     main()
+
+
+
