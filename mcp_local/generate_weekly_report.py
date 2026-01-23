@@ -13,9 +13,11 @@ from reportlab.platypus import (
     TableStyle,
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import PageBreak, PageTemplate
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib import colors
+from reportlab.lib.units import inch
 
 # -----------------------------
 # CONFIG
@@ -304,6 +306,9 @@ def generate_pdf(analysis):
                 hAlign="CENTER",
             )
         )
+    
+    elements.append(PageBreak())
+
     # -------- TOP 5 ALARMS --------
     elements.append(
     Paragraph("5. Top 5 Alarms Triggered", styles["SectionHeader"])
@@ -320,19 +325,25 @@ def generate_pdf(analysis):
         alarm_table_data.append(["No alarms found", "0"])
 
     elements.append(
-    Table(
+     Table(
         alarm_table_data,
-        colWidths=[380, 60],
+        colWidths=[PAGE_WIDTH * 0.75, PAGE_WIDTH * 0.15],  # Use PAGE_WIDTH and reduce total to 0.9
+        repeatRows=1,
         style=[
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
             ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 10),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ],
     )
 )
-
-
     pdf.build(elements)
 
 
