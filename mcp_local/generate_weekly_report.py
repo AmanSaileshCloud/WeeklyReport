@@ -106,6 +106,7 @@ def analyze_data(df):
         )
     ]
 
+    # -------- STATUS COUNTS --------
     status_counts = (
         df["Status (Ticket)"]
         .value_counts()
@@ -113,13 +114,49 @@ def analyze_data(df):
         .to_dict()
     )
 
+    # -------- TOP 5 ALARMS (FROM SUBJECT) --------
+    alarm_df = df[df["Subject"].str.contains("alarm", case=False, na=False)]
+
+    top_alarms = (
+        alarm_df["Subject"]
+        .value_counts()
+        .head(5)
+        .reset_index()
+    )
+    top_alarms.columns = ["Alarm Name", "Count"]
+
+    # -------- CLIENT TICKET TYPE CLASSIFICATION --------
+    def classify_ticket(subject: str) -> str:
+        s = subject.lower()
+        if "billing" in s or "cost" in s:
+            return "Billing / Cost"
+        if "down" in s or "outage" in s:
+            return "Downtime / Outage"
+        if "slow" in s or "performance" in s or "latency" in s:
+            return "Performance Issue"
+        if "backup" in s or "snapshot" in s:
+            return "Backup / Restore"
+        if "access" in s or "login" in s or "iam" in s:
+            return "Access / IAM"
+        return "Others"
+
+    df["Client Ticket Category"] = df["Subject"].astype(str).apply(classify_ticket)
+
+    client_ticket_types = (
+        df["Client Ticket Category"]
+        .value_counts()
+        .reset_index()
+    )
+    client_ticket_types.columns = ["Ticket Category", "Count"]
+
     return {
         "total_tickets": df["Ticket Id"].nunique(),
         "sla_violated": sla_df["Ticket Id"].nunique(),
         "status_breakdown": status_counts,
         "ticket_type_breakdown": df["Ticket Type"].value_counts().to_dict(),
+        "top_alarms": top_alarms,
+        "client_ticket_types": client_ticket_types,
     }
-
 
 # -----------------------------
 # GRAPH GENERATION
