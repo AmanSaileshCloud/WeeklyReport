@@ -18,6 +18,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib import colors
 from reportlab.lib.units import inch
+from reportlab.pdfgen import canvas
 
 # -----------------------------
 # CONFIG
@@ -25,6 +26,46 @@ from reportlab.lib.units import inch
 REPORT_PATH = "reports/zoho_weekly_report.csv"
 OUTPUT_PDF_FILE = "weekly_report.pdf"
 GRAPH_DIR = "graphs"
+LOGO_PATH = "workmates_logo.png"  # Place your logo file in the same directory
+
+# -----------------------------
+# WATERMARK CANVAS CLASS
+# -----------------------------
+class WatermarkCanvas(canvas.Canvas):
+    def __init__(self, *args, **kwargs):
+        canvas.Canvas.__init__(self, *args, **kwargs)
+
+    def showPage(self):
+        # Add watermark to each page
+        if os.path.exists(LOGO_PATH):
+            # Save the current state
+            self.saveState()
+            
+            # Set transparency for watermark (0.2 for subtle but visible watermark)
+            self.setFillAlpha(0.2)
+            
+            # Calculate center position for watermark
+            page_width, page_height = A4
+            logo_width = 150
+            logo_height = 75
+            x = (page_width - logo_width) / 2
+            y = (page_height - logo_height) / 2
+            
+            # Draw the watermark in the center of the page
+            try:
+                self.drawImage(LOGO_PATH, x, y, width=logo_width, height=logo_height)
+            except Exception:
+                # If there's an error with the image, draw a text watermark instead
+                self.setFont("Helvetica", 16)
+                self.setFillColor(colors.lightgrey)
+                self.drawCentredText(page_width/2, page_height/2, "WORKMATES")
+            
+            # Restore the state
+            self.restoreState()
+        
+        # Call the parent showPage method
+        canvas.Canvas.showPage(self)
+        canvas.Canvas.showPage(self)
 
 REQUIRED_COLUMNS = [
     "Ticket Id",
@@ -211,6 +252,7 @@ def generate_pdf(analysis):
         leftMargin=30,
         topMargin=30,
         bottomMargin=30,
+        canvasmaker=WatermarkCanvas,
     )
 
     PAGE_WIDTH = A4[0] - 60
@@ -311,39 +353,76 @@ def generate_pdf(analysis):
 
     # -------- TOP 5 ALARMS --------
     elements.append(
-    Paragraph("5. Top 5 Alarms Triggered", styles["SectionHeader"])
-)
+        Paragraph("5. Top 5 Alarms Triggered", styles["SectionHeader"])
+    )
 
     alarm_table_data = [["Alarm Name", "Count"]]
 
     if not analysis["top_alarms"].empty:
         for _, row in analysis["top_alarms"].iterrows():
             alarm_table_data.append(
-            [row["Alarm Name"], row["Count"]]
-        )
+                [row["Alarm Name"], row["Count"]]
+            )
     else:
         alarm_table_data.append(["No alarms found", "0"])
 
     elements.append(
-     Table(
-        alarm_table_data,
-        colWidths=[PAGE_WIDTH * 0.75, PAGE_WIDTH * 0.15],  # Use PAGE_WIDTH and reduce total to 0.9
-        repeatRows=1,
-        style=[
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
-            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, 0), 10),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ],
+        Table(
+            alarm_table_data,
+            colWidths=[PAGE_WIDTH * 0.75, PAGE_WIDTH * 0.15],
+            repeatRows=1,
+            style=[
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ],
+        )
     )
-)
+
+    # -------- CLIENT TICKET TYPES --------
+    elements.append(
+        Paragraph("6. Client Ticket Types", styles["SectionHeader"])
+    )
+
+    client_ticket_table_data = [["Ticket Category", "Count"]]
+
+    if not analysis["client_ticket_types"].empty:
+        for _, row in analysis["client_ticket_types"].iterrows():
+            client_ticket_table_data.append(
+                [row["Ticket Category"], row["Count"]]
+            )
+    else:
+        client_ticket_table_data.append(["No tickets found", "0"])
+
+    elements.append(
+        Table(
+            client_ticket_table_data,
+            colWidths=[PAGE_WIDTH * 0.75, PAGE_WIDTH * 0.15],
+            repeatRows=1,
+            style=[
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ],
+        )
+    )
+
     pdf.build(elements)
 
 
@@ -369,6 +448,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
