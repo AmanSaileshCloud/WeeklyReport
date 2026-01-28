@@ -11,6 +11,7 @@ from reportlab.platypus import (
     Image,
     Table,
     TableStyle,
+    Frame,
 )
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import PageBreak, PageTemplate
@@ -26,46 +27,65 @@ from reportlab.pdfgen import canvas
 REPORT_PATH = "reports/zoho_weekly_report.csv"
 OUTPUT_PDF_FILE = "weekly_report.pdf"
 GRAPH_DIR = "graphs"
-LOGO_PATH = "workmates_logo.png"  # Place your logo file in the same directory
+
+LOGO_PATH = "workmates_logo.png"  # Change this to your absolute path
+
+# Next week focus areas (edit this list as needed)
+NEXT_WEEK_FOCUS = [
+    "Focus on reducing SLA violations through proactive monitoring",
+    "Implement alerts auditing for critical performance issues",
+    "Review the MSP docs and implement in our system",
+    "Conduct KT session on new SLA guidelines",
+    "MSR Workflow should be completed within 2 days"
+]
 
 # -----------------------------
-# WATERMARK CANVAS CLASS
+# WATERMARK FUNCTION
 # -----------------------------
-class WatermarkCanvas(canvas.Canvas):
-    def __init__(self, *args, **kwargs):
-        canvas.Canvas.__init__(self, *args, **kwargs)
-
-    def showPage(self):
-        # Add watermark to each page
-        if os.path.exists(LOGO_PATH):
-            # Save the current state
-            self.saveState()
-            
-            # Set transparency for watermark (0.2 for subtle but visible watermark)
-            self.setFillAlpha(0.2)
-            
-            # Calculate center position for watermark
-            page_width, page_height = A4
-            logo_width = 150
-            logo_height = 75
-            x = (page_width - logo_width) / 2
-            y = (page_height - logo_height) / 2
-            
-            # Draw the watermark in the center of the page
-            try:
-                self.drawImage(LOGO_PATH, x, y, width=logo_width, height=logo_height)
-            except Exception:
-                # If there's an error with the image, draw a text watermark instead
-                self.setFont("Helvetica", 16)
-                self.setFillColor(colors.lightgrey)
-                self.drawCentredText(page_width/2, page_height/2, "WORKMATES")
-            
-            # Restore the state
-            self.restoreState()
+def add_watermark(canvas_obj, doc):
+    """Add watermark to each page"""
+    canvas_obj.saveState()
+    
+    page_width, page_height = A4
+    
+    if os.path.exists(LOGO_PATH):
+        # Set transparency for watermark
+        canvas_obj.setFillAlpha(0.15)
+        canvas_obj.setStrokeAlpha(0.15)
         
-        # Call the parent showPage method
-        canvas.Canvas.showPage(self)
-        canvas.Canvas.showPage(self)
+        # Calculate center position for watermark
+        logo_width = 400
+        logo_height = 200
+        x = (page_width - logo_width) / 2
+        y = (page_height - logo_height) / 2 + 100  # Move up by 100 points
+        
+        # Draw the watermark in the center of the page
+        try:
+            canvas_obj.drawImage(
+                LOGO_PATH, 
+                x, y, 
+                width=logo_width, 
+                height=logo_height,
+                mask='auto',
+                preserveAspectRatio=True
+            )
+            logging.info("Watermark added successfully")
+        except Exception as e:
+            # If there's an error with the image, draw a text watermark instead
+            logging.error(f"Failed to load logo image: {e}")
+            canvas_obj.setFont("Helvetica", 30)
+            canvas_obj.setFillColor(colors.Color(0.85, 0.85, 0.85))
+            canvas_obj.drawCentredString(page_width/2, page_height/2, "WORKMATES")
+    else:
+        logging.warning(f"Logo file not found at: {LOGO_PATH}")
+        # Draw text watermark as fallback
+        canvas_obj.setFont("Helvetica", 30)
+        canvas_obj.setFillAlpha(0.15)
+        canvas_obj.setFillColor(colors.Color(0.8, 0.8, 0.8))
+        canvas_obj.drawCentredString(page_width/2, page_height/2, "WORKMATES")
+    
+    canvas_obj.restoreState()
+
 
 REQUIRED_COLUMNS = [
     "Ticket Id",
@@ -192,6 +212,23 @@ def analyze_data(df):
     )
     client_ticket_types.columns = ["Ticket Category", "Count"]
 
+    # -------- BREAKDOWN OF "OTHERS" TICKETS --------
+    others_df = df[df["Client Ticket Category"] == "Others"]
+    
+    # Get list of top alarm subjects to exclude from Others
+    top_alarm_subjects = top_alarms["Alarm Name"].tolist() if not top_alarms.empty else []
+    
+    # Exclude tickets that are in top alarms
+    others_df_filtered = others_df[~others_df["Subject"].isin(top_alarm_subjects)]
+    
+    others_breakdown = (
+        others_df_filtered["Subject"]
+        .value_counts()
+        .head(5)  # Get only top 5
+        .reset_index()
+    )
+    others_breakdown.columns = ["Subject", "Count"]
+
     return {
         "total_tickets": df["Ticket Id"].nunique(),
         "sla_violated": sla_df["Ticket Id"].nunique(),
@@ -199,6 +236,7 @@ def analyze_data(df):
         "ticket_type_breakdown": df["Ticket Type"].value_counts().to_dict(),
         "top_alarms": top_alarms,
         "client_ticket_types": client_ticket_types,
+        "others_breakdown": others_breakdown,
     }
 
 # -----------------------------
@@ -252,7 +290,6 @@ def generate_pdf(analysis):
         leftMargin=30,
         topMargin=30,
         bottomMargin=30,
-        canvasmaker=WatermarkCanvas,
     )
 
     PAGE_WIDTH = A4[0] - 60
@@ -309,7 +346,9 @@ def generate_pdf(analysis):
             style=[
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                 ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),  # Center align header row
                 ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),  # Bold header row
             ],
         )
     )
@@ -328,7 +367,9 @@ def generate_pdf(analysis):
             style=[
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                 ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("ALIGN", (0, 0), (-1, 0), "CENTER"),  # Center align header row
                 ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),  # Bold header row
             ],
         )
     )
@@ -423,7 +464,65 @@ def generate_pdf(analysis):
         )
     )
 
-    pdf.build(elements)
+    # -------- OTHERS BREAKDOWN --------
+    if not analysis["others_breakdown"].empty:
+        elements.append(
+            Paragraph("7. Top 5 'Others' Tickets", styles["SectionHeader"])
+        )
+        
+        elements.append(
+            Paragraph(
+                "<i>Note: 'Others' category contains alerts, alarms, and miscellaneous tickets that don't fall into the defined categories above.</i>",
+                styles["Normal"]
+            )
+        )
+        
+        elements.append(Spacer(1, 10))
+
+        others_table_data = [["Subject", "Count"]]
+
+        for _, row in analysis["others_breakdown"].iterrows():
+            others_table_data.append(
+                [row["Subject"], row["Count"]]
+            )
+
+        elements.append(
+            Table(
+                others_table_data,
+                colWidths=[PAGE_WIDTH * 0.75, PAGE_WIDTH * 0.15],
+                repeatRows=1,
+                style=[
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.9, 0.9, 0.9)),
+                    ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+                    ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("FONTSIZE", (0, 0), (-1, 0), 10),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ],
+            )
+        )
+
+    # -------- NEXT WEEK FOCUS --------
+    elements.append(
+        Paragraph("8. Next Week Focus", styles["SectionHeader"])
+    )
+    
+    # Add each focus point as a bullet
+    for focus_item in NEXT_WEEK_FOCUS:
+        elements.append(
+            Paragraph(
+                f"• {focus_item}",
+                styles["Normal"]
+            )
+        )
+        elements.append(Spacer(1, 6))
+
+    pdf.build(elements, onFirstPage=add_watermark, onLaterPages=add_watermark)
 
 
 def generate_weekly_report():
