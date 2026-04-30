@@ -1,0 +1,7 @@
+credentials:
+  usernames:
+    admin:
+      name: Admin
+      email: admin@yourcompany.com
+      password: "$2b$12$REPLACE_WITH_BCRYPT_HASH"
+      role: admin

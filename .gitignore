@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Sensitive files — do NOT push passwords
+mcp_local/users.yaml
+
+# Generated PDFs
+mcp_local/weekly_report_*.pdf
+
+# IDE
+.vscode/
+
+# Claude AI session data
+.claude/
+
+# Cloned template — not needed in repo
+streamlit-authentication-template/
+
+# Streamlit cache
+.streamlit/secrets.toml
