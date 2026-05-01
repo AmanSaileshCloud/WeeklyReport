@@ -1,6 +1,9 @@
+import os
 import streamlit as st
 from utils.db_handler import authenticate_user, get_user_by_email
 import time
+
+_LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "logo.png")
 
 def login_page(guest_mode=False):
     st.markdown("""
@@ -28,7 +31,7 @@ def login_page(guest_mode=False):
             img_col, form_col = st.columns([4, 5])
 
             with img_col:
-                st.image("logo.png", use_container_width=True)
+                st.image(_LOGO_PATH, use_container_width=True)
 
             with form_col:
                 st.markdown("## Login Page")
