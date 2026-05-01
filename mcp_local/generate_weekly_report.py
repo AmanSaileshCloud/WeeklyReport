@@ -1,6 +1,8 @@
 import os
+import re
 import shutil
 import logging
+import numpy as np
 import matplotlib
 matplotlib.use("Agg")  # Non-interactive backend — must be before pyplot import
 import matplotlib.pyplot as plt
@@ -49,22 +51,22 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # SETTINGS  (all values editable via config.yaml)
 # Helper to resolve paths relative to script directory
 # ---------------------------------------------------------------
-def _resolve_path(config_value: str, default: str) -> str:
-    """Resolve config path to absolute, making relative paths relative to script dir."""
-    path = config_value or default
+def _resolve_path(env_key: str, config_value: str, default: str) -> str:
+    """Priority: env var → config.yaml → built-in default. Relative paths resolved to script dir."""
+    path = os.environ.get(env_key) or config_value or default
     if not os.path.isabs(path):
         path = os.path.join(_BASE_DIR, path)
     return path
 
-REPORT_PATH   = _resolve_path(_CFG.get("report_path"), "reports/zoho_weekly_report.csv")
-GRAPH_DIR     = _resolve_path(_CFG.get("graph_dir"), "graphs")
-LOGO_PATH     = _resolve_path(_CFG.get("logo_path"), "logo.png")
-COMPANY_NAME  = _CFG.get("company_name",  "Workmates")
-DAYS_RANGE    = int(_CFG.get("days_range", 7))
+REPORT_PATH   = _resolve_path("REPORT_PATH",  _CFG.get("report_path"), "reports/zoho_weekly_report.csv")
+GRAPH_DIR     = _resolve_path("GRAPH_DIR",    _CFG.get("graph_dir"),   "graphs")
+LOGO_PATH     = _resolve_path("LOGO_PATH",    _CFG.get("logo_path"),   "logo.png")
+COMPANY_NAME  = os.environ.get("COMPANY_NAME")  or _CFG.get("company_name",  "Workmates")
+DAYS_RANGE    = int(os.environ.get("DAYS_RANGE") or _CFG.get("days_range", 7))
 
 _today        = datetime.now()
 _default_pdf  = os.path.join(_BASE_DIR, f"weekly_report_{_today.strftime('%Y%m%d')}.pdf")
-OUTPUT_PDF_FILE = _CFG.get("output_pdf") or _default_pdf
+OUTPUT_PDF_FILE = os.environ.get("OUTPUT_PDF") or _CFG.get("output_pdf") or _default_pdf
 
 NEXT_WEEK_FOCUS: list = _CFG.get("next_week_focus", [
     "Focus on reducing SLA violations through proactive monitoring",
@@ -100,7 +102,37 @@ REQUIRED_COLUMNS = [
     "Team",
     "Ticket Age",
     "Is Escalated",
+    "Resolution Time in Business Hours",
+    "First Response Time in Business Hours",
+    "Account Name (Ticket)",
+    "Modified Time (Ticket)",
 ]
+
+
+def _parse_time_to_minutes(val) -> float:
+    try:
+        s = str(val).strip()
+        if s in ('-', '', 'nan', 'NaN', 'None'):
+            return float('nan')
+        parts = s.split(':')
+        if len(parts) == 3:
+            return int(parts[0]) * 60 + int(parts[1]) + float(parts[2]) / 60
+        return float('nan')
+    except Exception:
+        return float('nan')
+
+
+def _parse_ticket_age_days(val) -> float:
+    try:
+        s = str(val).strip()
+        if s in ('-', '', 'nan', 'NaN', 'None'):
+            return float('nan')
+        d_match = re.search(r'(\d+)d', s)
+        h_match = re.search(r'(\d+)h', s)
+        days = (int(d_match.group(1)) if d_match else 0) + (int(h_match.group(1)) / 24 if h_match else 0)
+        return days if (d_match or h_match) else float('nan')
+    except Exception:
+        return float('nan')
 
 STATUS_MASTER = [
     "Assigned",
@@ -174,6 +206,82 @@ def add_page_decorations(canvas_obj, doc):
 
 
 # ---------------------------------------------------------------
+# WEEK-OVER-WEEK COMPARISON
+# ---------------------------------------------------------------
+def get_previous_period_metrics(df: pd.DataFrame, days: int) -> dict:
+    df = df.copy()
+    df["Created Time (Ticket)"] = pd.to_datetime(df["Created Time (Ticket)"], errors="coerce", dayfirst=True)
+    now   = datetime.now()
+    end   = now - timedelta(days=days)
+    start = now - timedelta(days=days * 2)
+    prev  = df[(df["Created Time (Ticket)"] >= start) & (df["Created Time (Ticket)"] < end)].copy()
+    if prev.empty:
+        return {}
+    total     = prev["Ticket Id"].nunique()
+    sla_viol  = prev["SLA Violation Type"].isin(["Response Violation", "Resolution Violation"]).sum()
+    resolved  = prev["Status (Ticket)"].astype(str).str.strip().str.title().isin(["Resolved", "Closed"]).sum()
+    escalated = (prev["Is Escalated"].fillna("FALSE").astype(str).str.upper() == "TRUE").sum()
+    return {
+        "total":            total,
+        "sla_violated":     int(sla_viol),
+        "sla_rate":         (sla_viol  / total * 100) if total else 0.0,
+        "resolution_rate":  (resolved  / total * 100) if total else 0.0,
+        "escalation_rate":  (escalated / total * 100) if total else 0.0,
+        "resolved_count":   int(resolved),
+        "escalated_count":  int(escalated),
+    }
+
+
+# ---------------------------------------------------------------
+# AUTO-GENERATED EXECUTIVE SUMMARY
+# ---------------------------------------------------------------
+def generate_executive_summary(analysis: dict, prev: dict, company_name: str = "") -> str:
+    total          = analysis["total_tickets"]
+    sla_rate       = analysis["sla_rate"]
+    esc_rate       = analysis["escalation_rate"]
+    res_rate       = analysis["resolution_rate"]
+    mttr           = analysis.get("mttr_minutes", 0)
+    mttr_str       = f"{int(mttr // 60)}h {int(mttr % 60)}m" if mttr >= 60 else f"{int(mttr)}m"
+    esc_by_team    = analysis.get("escalation_by_team", pd.Series(dtype=float))
+    top_team       = esc_by_team.index[0]  if not esc_by_team.empty else None
+    top_team_rate  = esc_by_team.iloc[0]   if not esc_by_team.empty else 0.0
+
+    wow = ""
+    if prev and prev.get("total", 0) > 0:
+        delta = ((total - prev["total"]) / prev["total"]) * 100
+        direction = "increase" if delta > 0 else "decrease"
+        wow = f", a **{abs(delta):.0f}% {direction}** from the previous period"
+
+    sla_status = "within acceptable limits" if sla_rate < 10 else "above acceptable thresholds — action required"
+
+    lines = [
+        f"This reporting period recorded **{total:,} tickets**{wow}. "
+        f"SLA violations stood at **{sla_rate:.1f}%** ({sla_status}). "
+        f"The overall resolution rate was **{res_rate:.1f}%** with an average resolution time (MTTR) of **{mttr_str}**. "
+        f"Escalations accounted for **{esc_rate:.1f}%** of all tickets"
+        + (f", with **{top_team}** recording the highest escalation rate at **{top_team_rate:.1f}%**." if top_team else ".")
+    ]
+
+    if prev:
+        sla_delta  = sla_rate - prev.get("sla_rate", sla_rate)
+        esc_delta  = esc_rate - prev.get("escalation_rate", esc_rate)
+        res_delta  = res_rate - prev.get("resolution_rate", res_rate)
+        if abs(sla_delta) > 0.5:
+            lines.append(f"⚠️ SLA violations {'increased' if sla_delta > 0 else 'improved'} by **{abs(sla_delta):.1f}%** vs last period.")
+        if abs(esc_delta) > 0.5:
+            lines.append(f"⚠️ Escalation rate {'rose' if esc_delta > 0 else 'dropped'} by **{abs(esc_delta):.1f}%** vs last period.")
+        if abs(res_delta) > 1:
+            lines.append(f"✅ Resolution rate {'improved' if res_delta > 0 else 'declined'} by **{abs(res_delta):.1f}%** vs last period.")
+
+    if sla_rate > 15:
+        lines.append("🚨 **Critical:** SLA violations exceed 15% — immediate management review recommended.")
+    if esc_rate > 5:
+        lines.append("🚨 **Alert:** Escalation rate exceeds 5% threshold — team capacity review advised.")
+
+    return "  \n".join(lines)
+
+
+# ---------------------------------------------------------------
 # LOAD DATA
 # ---------------------------------------------------------------
 def load_data(csv_path: str = None) -> pd.DataFrame:
@@ -213,9 +321,14 @@ def prepare_weekly_data(df: pd.DataFrame, days: int = None) -> pd.DataFrame:
     df["Priority (Ticket)"] = df["Priority (Ticket)"].fillna("Unknown").astype(str).str.strip().str.title()
     df["Team"]              = df["Team"].fillna("Unassigned").astype(str).str.strip()
     
-    # Process new columns
-    df["Ticket Age"]  = df["Ticket Age"].fillna("").astype(str).str.strip()
+    df["Ticket Age"]   = df["Ticket Age"].fillna("").astype(str).str.strip()
     df["Is Escalated"] = df["Is Escalated"].fillna("FALSE").astype(str).str.strip().str.upper()
+
+    # Parse new columns
+    df["Resolution Time (Minutes)"]      = df["Resolution Time in Business Hours"].apply(_parse_time_to_minutes)
+    df["First Response Time (Minutes)"]  = df["First Response Time in Business Hours"].apply(_parse_time_to_minutes)
+    df["Ticket Age (Days)"]              = df["Ticket Age"].apply(_parse_ticket_age_days)
+    df["Account Name (Ticket)"]          = df["Account Name (Ticket)"].fillna("-").astype(str).str.strip()
 
     return df
 
@@ -355,6 +468,129 @@ def analyze_data(df: pd.DataFrame) -> dict:
     escalation_trend.columns = ["Date", "Escalations"]
     escalation_trend = escalation_trend.sort_values(by="Date")
 
+    # MTTR — average resolution time (resolved/closed tickets only)
+    resolved_df = df[df["Status (Ticket)"].isin(["Resolved", "Closed"]) & df["Resolution Time (Minutes)"].notna()]
+    mttr_minutes = resolved_df["Resolution Time (Minutes)"].mean() if len(resolved_df) > 0 else 0.0
+
+    # Average First Response Time
+    first_resp = df["First Response Time (Minutes)"].dropna()
+    avg_first_response_minutes = first_resp.mean() if len(first_resp) > 0 else 0.0
+
+    # Client Breakdown (top 10 accounts by ticket volume)
+    client_df = df[~df["Account Name (Ticket)"].isin(['-', '', 'nan', 'NaN'])]
+    client_breakdown = client_df["Account Name (Ticket)"].value_counts().head(10).to_dict()
+
+    # Ticket Aging Buckets
+    _bucket_order = ["0-3 days", "3-7 days", "7-14 days", "14-30 days", "30+ days"]
+    def _age_bucket(d):
+        if d <= 3:   return "0-3 days"
+        elif d <= 7:  return "3-7 days"
+        elif d <= 14: return "7-14 days"
+        elif d <= 30: return "14-30 days"
+        else:         return "30+ days"
+    ticket_aging = (
+        df["Ticket Age (Days)"].dropna()
+        .apply(_age_bucket)
+        .value_counts()
+        .reindex(_bucket_order, fill_value=0)
+        .to_dict()
+    )
+
+    # Team Performance Scorecard
+    team_resolved_counts = df[df["Status (Ticket)"].isin(["Resolved", "Closed"])].groupby("Team")["Ticket Id"].count()
+    team_mttr_avg        = df.groupby("Team")["Resolution Time (Minutes)"].mean()
+    team_first_resp_avg  = df.groupby("Team")["First Response Time (Minutes)"].mean()
+    scorecard = teams_data.copy()
+    scorecard["Resolved"]           = scorecard.index.map(team_resolved_counts).fillna(0).astype(int)
+    scorecard["Resolution Rate %"]  = (scorecard["Resolved"] / scorecard["total"] * 100).round(1)
+    scorecard["Escalation Rate %"]  = (scorecard["escalated"] / scorecard["total"] * 100).round(1)
+    scorecard["Avg MTTR (min)"]     = scorecard.index.map(team_mttr_avg).fillna(0).round(0).astype(int)
+    scorecard["Avg 1st Resp (min)"] = scorecard.index.map(team_first_resp_avg).fillna(0).round(0).astype(int)
+    scorecard = scorecard.reset_index()[["Team", "total", "Resolved", "Resolution Rate %", "escalated", "Escalation Rate %", "Avg MTTR (min)", "Avg 1st Resp (min)"]]
+    scorecard.columns = ["Team", "Total", "Resolved", "Resolution Rate %", "Escalated", "Escalation Rate %", "Avg MTTR (min)", "Avg 1st Resp (min)"]
+    scorecard = scorecard.sort_values("Total", ascending=False)
+
+    # Next Week Forecast — linear regression on daily trend
+    nw_df = daily_trend.copy()
+    nw_df["Date"] = pd.to_datetime(nw_df["Date"])
+    nw_df = nw_df.sort_values("Date").reset_index(drop=True)
+    if len(nw_df) >= 3:
+        x = np.arange(len(nw_df))
+        y = nw_df["Count"].values.astype(float)
+        slope, intercept = np.polyfit(x, y, 1)
+        last_date = nw_df["Date"].max()
+        projected = []
+        for i in range(1, 8):
+            val = max(0, slope * (len(nw_df) - 1 + i) + intercept)
+            projected.append({"Date": last_date + timedelta(days=i), "Predicted": int(round(val))})
+        proj_df = pd.DataFrame(projected)
+        nw_total = int(proj_df["Predicted"].sum())
+        next_week_forecast = {
+            "daily":                  proj_df,
+            "historical":             nw_df.tail(14),
+            "total":                  nw_total,
+            "predicted_sla":          int(round(nw_total * ((sla_violated / total) if total else 0))),
+            "predicted_escalations":  int(round(nw_total * (escalation_rate / 100))),
+            "trend":                  "up" if slope > 0.05 else ("down" if slope < -0.05 else "stable"),
+            "slope":                  round(slope, 2),
+        }
+    else:
+        next_week_forecast = {}
+
+    # SLA Breach Details
+    sla_breach_details = (
+        df[df["SLA Violation Type"].isin(["Response Violation", "Resolution Violation"])]
+        [["Ticket Id", "Subject", "Team", "Priority (Ticket)", "SLA Violation Type", "Ticket Age", "Account Name (Ticket)"]]
+        .drop_duplicates(subset=["Ticket Id"])
+        .rename(columns={"Priority (Ticket)": "Priority", "SLA Violation Type": "Violation Type", "Account Name (Ticket)": "Client"})
+        .sort_values("Ticket Age", ascending=False)
+        .reset_index(drop=True)
+    )
+
+    # Client Health Scorecard
+    valid_clients = df[~df["Account Name (Ticket)"].isin(['-', '', 'nan', 'NaN'])].copy()
+    if not valid_clients.empty:
+        ch = valid_clients.groupby("Account Name (Ticket)").agg(
+            Total=("Ticket Id", "count"),
+            SLA_Violations=("SLA Violation Type", lambda x: x.isin(["Response Violation", "Resolution Violation"]).sum()),
+            Escalated=("Is Escalated", lambda x: (x.astype(str).str.upper() == "TRUE").sum()),
+            Avg_Response=("First Response Time (Minutes)", "mean"),
+        ).reset_index()
+        ch.columns = ["Client", "Total", "SLA Violations", "Escalated", "Avg Response (min)"]
+        ch["SLA Rate %"]        = (ch["SLA Violations"] / ch["Total"] * 100).round(1)
+        ch["Escalation Rate %"] = (ch["Escalated"] / ch["Total"] * 100).round(1)
+        ch["Avg Response (min)"] = ch["Avg Response (min)"].round(0).fillna(0).astype(int)
+        ch = ch[["Client", "Total", "SLA Violations", "SLA Rate %", "Escalated", "Escalation Rate %", "Avg Response (min)"]].sort_values("Total", ascending=False)
+        client_health = ch
+    else:
+        client_health = pd.DataFrame()
+
+    # Open Tickets Aging
+    open_df = df[~df["Status (Ticket)"].isin(["Resolved", "Closed"])].copy()
+    if not open_df.empty:
+        open_aging = (
+            open_df[["Ticket Id", "Subject", "Team", "Priority (Ticket)", "Status (Ticket)", "Ticket Age", "Account Name (Ticket)"]]
+            .rename(columns={"Priority (Ticket)": "Priority", "Status (Ticket)": "Status", "Account Name (Ticket)": "Client"})
+            .sort_values("Ticket Age", ascending=False)
+            .reset_index(drop=True)
+        )
+    else:
+        open_aging = pd.DataFrame()
+
+    # Heatmap data — ticket count by Day-of-Week × Hour
+    heatmap_df = df.copy()
+    heatmap_df["Hour"]       = heatmap_df["Created Time (Ticket)"].dt.hour
+    heatmap_df["DayOfWeek"]  = heatmap_df["Created Time (Ticket)"].dt.day_name()
+    day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    heatmap_pivot = (
+        heatmap_df.groupby(["DayOfWeek", "Hour"])["Ticket Id"]
+        .count()
+        .reset_index()
+        .pivot(index="DayOfWeek", columns="Hour", values="Ticket Id")
+        .reindex(day_order)
+        .fillna(0)
+    )
+
     # Forecast for next month
     pred_total = int(round(total * 4.3))
     forecast = {
@@ -381,11 +617,21 @@ def analyze_data(df: pd.DataFrame) -> dict:
         "top_alarms":           top_alarms,
         "client_ticket_types":  client_ticket_types,
         "others_breakdown":     others_breakdown,
-        "escalation_by_team":   escalation_by_team,
-        "top_escalated_issues": top_escalated_issues,
-        "escalation_trend":     escalation_trend,
-        "untagged_tickets":     untagged_tickets,
-        "forecast":             forecast,
+        "escalation_by_team":           escalation_by_team,
+        "top_escalated_issues":         top_escalated_issues,
+        "escalation_trend":             escalation_trend,
+        "untagged_tickets":             untagged_tickets,
+        "forecast":                     forecast,
+        "mttr_minutes":                 mttr_minutes,
+        "avg_first_response_minutes":   avg_first_response_minutes,
+        "client_breakdown":             client_breakdown,
+        "ticket_aging":                 ticket_aging,
+        "team_scorecard":               scorecard,
+        "next_week_forecast":           next_week_forecast,
+        "sla_breach_details":           sla_breach_details,
+        "client_health":                client_health,
+        "open_tickets_aging":           open_aging,
+        "heatmap_pivot":                heatmap_pivot,
     }
 
 # ---------------------------------------------------------------

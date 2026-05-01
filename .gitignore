@@ -11,6 +11,10 @@ env/
 
 # Sensitive files — do NOT push passwords
 mcp_local/users.yaml
+.env
+
+# Generated graph PNGs
+mcp_local/graphs/*.png
 
 # Generated PDFs
 mcp_local/weekly_report_*.pdf
