@@ -1,22 +1,31 @@
 import os
+import logging
+import tempfile
 import bcrypt
 from contextlib import contextmanager
 
 _DATABASE_URL = os.environ.get("DATABASE_URL")
 
 # ── Backend selection ────────────────────────────────────────────────────────
-# DATABASE_URL set  →  PostgreSQL via Supabase (production)
-# DATABASE_URL unset →  SQLite (local development)
+# DATABASE_URL set   →  PostgreSQL via Supabase (production)
+# DATABASE_URL unset →  SQLite (local / Streamlit Cloud without secrets)
 
 if _DATABASE_URL:
     import psycopg2
     import psycopg2.pool
 
-    _pool = psycopg2.pool.SimpleConnectionPool(1, 5, _DATABASE_URL)
+    _pool = None  # created lazily on first use — avoids crash at import time
+
+    def _get_pool():
+        global _pool
+        if _pool is None:
+            _pool = psycopg2.pool.SimpleConnectionPool(1, 5, _DATABASE_URL)
+        return _pool
 
     @contextmanager
     def _get_conn():
-        conn = _pool.getconn()
+        pool = _get_pool()
+        conn = pool.getconn()
         try:
             yield conn
             conn.commit()
@@ -24,7 +33,7 @@ if _DATABASE_URL:
             conn.rollback()
             raise
         finally:
-            _pool.putconn(conn)
+            pool.putconn(conn)
 
     def _fetchone(cur) -> dict | None:
         row = cur.fetchone()
@@ -54,14 +63,15 @@ if _DATABASE_URL:
         cur.execute(sql, params)
         return cur
 
-    _PH = "%s"  # PostgreSQL placeholder
+    _PH = "%s"
 
 else:
     import sqlite3
 
+    # Use temp dir so it works on read-only filesystems (e.g. Streamlit Cloud)
     _DB_PATH = os.environ.get(
         "DB_PATH",
-        os.path.join(os.path.dirname(__file__), "..", "users.db"),
+        os.path.join(tempfile.gettempdir(), "users.db"),
     )
 
     @contextmanager
@@ -99,13 +109,16 @@ else:
     def _query(conn, sql, params=()):
         return conn.execute(sql, params)
 
-    _PH = "?"  # SQLite placeholder
+    _PH = "?"
 
 
-_init_db()
+try:
+    _init_db()
+except Exception as e:
+    logging.error(f"Database init failed: {e}")
 
 
-# ── Public API (identical regardless of backend) ─────────────────────────────
+# ── Public API ───────────────────────────────────────────────────────────────
 
 def get_user_by_email(email: str) -> dict | None:
     with _get_conn() as conn:
@@ -140,5 +153,12 @@ def save_user(email: str, password: str):
 
 def get_users() -> list[dict]:
     with _get_conn() as conn:
-        cur = _query(conn, "SELECT * FROM users")
+        cur = _query(conn, "SELECT id, username, email, role FROM users")
         return _fetchall(cur)
+
+
+def set_user_role(email: str, role: str):
+    if role not in ("admin", "viewer"):
+        raise ValueError("Role must be 'admin' or 'viewer'")
+    with _get_conn() as conn:
+        _query(conn, f"UPDATE users SET role = {_PH} WHERE LOWER(email) = LOWER({_PH})", (role, email))

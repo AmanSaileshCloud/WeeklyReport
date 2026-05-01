@@ -5,6 +5,8 @@ def init_session():
         st.session_state['authenticated'] = False
     if 'page' not in st.session_state:
         st.session_state['page'] = 'login'
+    if 'role' not in st.session_state:
+        st.session_state['role'] = 'viewer'
     if 'guest_mode' not in st.session_state:
         st.session_state['guest_mode'] = False
     if 'verifying' not in st.session_state:
@@ -23,6 +25,7 @@ def init_session():
 def reset_session():
     st.session_state['authenticated'] = False
     st.session_state['page'] = 'login'
+    st.session_state['role'] = 'viewer'
     st.session_state['guest_mode'] = False
     st.session_state['verifying'] = False
     st.session_state['otp'] = ""

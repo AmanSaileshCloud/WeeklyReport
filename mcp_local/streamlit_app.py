@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from page.login_page import login_page
 from page.signup_page import signup_page
 from utils.init_session import init_session, reset_session
+from utils.db_handler import get_users, set_user_role
 import json
 from generate_weekly_report import (
     load_data, prepare_weekly_data, analyze_data, generate_graphs, generate_pdf,
@@ -89,21 +90,31 @@ h1, h2, h3 { color: #FFFFFF; font-weight: 500; }
 div[data-testid="stForm"] { background: #1A1F2E; border-radius: 16px; padding: 30px; border: 1px solid #232A3F; max-width: 420px; margin: auto; }
 </style>""", unsafe_allow_html=True)
 
+_is_admin = st.session_state.get('role') == 'admin'
+
 with st.sidebar:
     if os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=120)
-    st.markdown(f"**👤 {st.session_state.get('name', '')}**")
+    role_badge = "🔴 Admin" if _is_admin else "🔵 Viewer"
+    st.markdown(f"**👤 {st.session_state.get('name', '')}** &nbsp; `{role_badge}`")
     if st.button("Logout", use_container_width=True):
         reset_session()
         st.rerun()
     st.markdown("### 📊 Dashboard Control\n---")
     _cfg = _load_config()
-    company_name = st.text_input("🏢 Company Name", _cfg.get("company_name", "Workmates"))
+    if _is_admin:
+        company_name = st.text_input("🏢 Company Name", _cfg.get("company_name", "Workmates"))
+    else:
+        company_name = _cfg.get("company_name", "Workmates")
     st.markdown("---\n### 📂 Data Source")
     default_csv_path = os.path.join(os.path.dirname(__file__), "reports", "zoho_weekly_report.csv")
     has_default = os.path.exists(default_csv_path)
     use_default = st.checkbox("📁 Use default CSV file", True) if has_default else False
-    uploaded_file = st.file_uploader("📤 Or upload a CSV file", type=["csv"])
+    if _is_admin:
+        uploaded_file = st.file_uploader("📤 Upload a CSV file", type=["csv"])
+    else:
+        uploaded_file = None
+        st.caption("📋 Viewers can only access the default report. Contact an admin to upload data.")
     st.markdown("---\n<div style='text-align: center; padding: 20px; color: #6B7280;'><p style='font-size: 12px;'><strong>Managed Service</strong><br>Weekly Tickets Analytics</p></div>", unsafe_allow_html=True)
 
 file_to_process = None
@@ -593,3 +604,32 @@ else:
         st.markdown("<div style='text-align: center; padding: 60px 20px;'><div style='font-size: 64px; margin-bottom: 20px;'>📂</div><h2 style='color: #FFFFFF; margin-bottom: 10px;'>No Data Source Selected</h2><p style='color: #9CA3AF; font-size: 16px; margin-bottom: 20px;'>Please select a data source in the sidebar to get started</p><div class='info-box'>📝 <strong>Options:</strong><br>✓ Check \"Use default CSV file\" to load data<br>✓ Or upload your own CSV file</div></div>", unsafe_allow_html=True)
 
 st.markdown("<div class='footer'><p>✨ <strong>Managed Service Weekly Tickets Report</strong> ✨<br>Built with Streamlit & Plotly | Powered by " + company_name + " Analytics<br><span style='color: #6B7280; font-size: 11px;'>📊 Dashboard v3.2 | Report Generated " + datetime.now().strftime("%d %b %Y") + "</span></p></div>", unsafe_allow_html=True)
+
+# ── ADMIN PANEL ──────────────────────────────────────────────────────────────
+if _is_admin:
+    st.markdown("---\n<div class='section-header'>⚙️ Admin Panel — User Management</div>", unsafe_allow_html=True)
+    try:
+        users = get_users()
+        if users:
+            for u in users:
+                col1, col2, col3 = st.columns([3, 2, 2])
+                with col1:
+                    st.markdown(f"**{u['email']}**")
+                with col2:
+                    current_role = u.get('role', 'viewer')
+                    st.markdown(f"`{'🔴 Admin' if current_role == 'admin' else '🔵 Viewer'}`")
+                with col3:
+                    if u['email'] != st.session_state.get('email'):
+                        new_role = 'viewer' if current_role == 'admin' else 'admin'
+                        label = f"Demote to Viewer" if current_role == 'admin' else f"Promote to Admin"
+                        if st.button(label, key=f"role_{u['email']}"):
+                            set_user_role(u['email'], new_role)
+                            st.success(f"Updated {u['email']} to {new_role}")
+                            st.rerun()
+                    else:
+                        st.caption("(you)")
+        else:
+            st.info("No users found.")
+    except Exception as e:
+        st.error("Could not load users.")
+        logging.exception(e)
