@@ -158,7 +158,9 @@ if file_to_process is not None:
 
         # Auto-generated summary paragraph
         summary_text = generate_executive_summary(analysis, prev, company_name)
-        st.markdown(f"<div class='info-box'>{summary_text}</div>", unsafe_allow_html=True)
+        import re
+        summary_html = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', summary_text)
+        st.markdown(f"<div class='info-box'>{summary_html}</div>", unsafe_allow_html=True)
         st.write("")
 
         # RAG badge helper
