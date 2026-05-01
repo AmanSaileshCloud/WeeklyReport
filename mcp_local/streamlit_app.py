@@ -599,7 +599,7 @@ else:
     with col2:
         st.markdown("<div style='text-align: center; padding: 60px 20px;'><div style='font-size: 64px; margin-bottom: 20px;'>📂</div><h2 style='color: #FFFFFF; margin-bottom: 10px;'>No Data Source Selected</h2><p style='color: #9CA3AF; font-size: 16px; margin-bottom: 20px;'>Please select a data source in the sidebar to get started</p><div class='info-box'>📝 <strong>Options:</strong><br>✓ Check \"Use default CSV file\" to load data<br>✓ Or upload your own CSV file</div></div>", unsafe_allow_html=True)
 
-st.markdown("<div class='footer'><p>✨ <strong>Managed Service Weekly Tickets Report</strong> ✨<br>Built with Streamlit & Plotly | Powered by " + company_name + " Analytics<br><span style='color: #6B7280; font-size: 11px;'>📊 Dashboard v3.2 | Report Generated " + datetime.now().strftime("%d %b %Y") + "</span></p></div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'><p>✨ <strong>Managed Service Weekly Tickets Report</strong> ✨<br>Built with Streamlit & Plotly | Powered by Workmates Uptime Team<br><span style='color: #6B7280; font-size: 11px;'>📊 Dashboard v3.2 | Report Generated " + datetime.now().strftime("%d %b %Y") + "</span></p></div>", unsafe_allow_html=True)
 
 # ── ADMIN PANEL ──────────────────────────────────────────────────────────────
 if _is_admin:
