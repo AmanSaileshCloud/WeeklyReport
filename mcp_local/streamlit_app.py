@@ -385,7 +385,7 @@ if file_to_process is not None:
             st.dataframe(styled, use_container_width=True, hide_index=True)
 
         st.markdown("---\n<div class='section-header'>📋 Detailed Analysis</div>", unsafe_allow_html=True)
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 SLA Summary", "🎯 Priority", "👥 Teams", "🏷️ Types", "🚨 Alarms"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 SLA Summary", "🎯 Priority", "🏷️ Types", "🚨 Alarms"])
         
         with tab1:
             sla_df = pd.DataFrame({"Metric": ["Total Tickets", "SLA Violations", "Escalated Tickets", "Resolved Tickets", "Avg Per Day", "Resolution Rate"], "Value": [f"{analysis['total_tickets']:,}", f"{analysis['sla_violated']:,}", f"{analysis['escalated_count']:,}", f"{analysis['resolved_count']:,}", f"{analysis['avg_per_day']:.2f}", f"{analysis['sla_rate']:.1f}%"]})
@@ -398,14 +398,10 @@ if file_to_process is not None:
                 st.markdown(f"<div class='danger-box'>⚠️ <strong>Warning:</strong> {analysis['untagged_tickets']} tickets have no priority assigned!</div>", unsafe_allow_html=True)
         
         with tab3:
-            team_df = pd.DataFrame(list(analysis["team_breakdown"].items()), columns=["Team", "Tickets"]).sort_values("Tickets", ascending=False)
-            st.dataframe(team_df, use_container_width=True, hide_index=True)
-        
-        with tab4:
             type_df = pd.DataFrame([(k, v) for k, v in analysis["ticket_type_breakdown"].items() if k not in ["-", "", "--Select--"]], columns=["Ticket Type", "Count"]).sort_values("Count", ascending=False)
             st.dataframe(type_df, use_container_width=True, hide_index=True)
-        
-        with tab5:
+
+        with tab4:
             if not analysis["top_alarms"].empty:
                 st.dataframe(analysis["top_alarms"], use_container_width=True, hide_index=True)
             else:
