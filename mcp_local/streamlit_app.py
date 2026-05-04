@@ -506,6 +506,7 @@ if file_to_process is not None:
                 hoverongaps=False,
                 text=heatmap.values.tolist(),
                 texttemplate="%{text:.0f}",
+                hovertemplate="<b>%{y}</b><br>Hour: %{x}<br>Tickets: %{z:.0f}<extra></extra>",
                 colorbar=dict(title=dict(text="Tickets", font=dict(color="white")), tickfont=dict(color="white"))
             ))
             fig.update_layout(
