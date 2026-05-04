@@ -5,6 +5,12 @@ import bcrypt
 from contextlib import contextmanager
 
 _DATABASE_URL = os.environ.get("DATABASE_URL")
+if not _DATABASE_URL:
+    try:
+        import streamlit as st
+        _DATABASE_URL = st.secrets.get("DATABASE_URL")
+    except Exception:
+        pass
 
 # ── Backend selection ────────────────────────────────────────────────────────
 # DATABASE_URL set   →  PostgreSQL via Supabase (production)
