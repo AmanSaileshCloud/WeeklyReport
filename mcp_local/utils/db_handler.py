@@ -1,125 +1,74 @@
 import os
 import logging
-import tempfile
 import bcrypt
+import psycopg2
+import psycopg2.pool
 from contextlib import contextmanager
 
-_DATABASE_URL = os.environ.get("DATABASE_URL")
-if not _DATABASE_URL:
+def _get_database_url() -> str:
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        try:
+            import streamlit as st
+            url = st.secrets.get("DATABASE_URL")
+        except Exception:
+            pass
+    if not url:
+        raise RuntimeError(
+            "DATABASE_URL is not set. Add it to your environment variables or Streamlit secrets."
+        )
+    return url
+
+_pool = None
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        _pool = psycopg2.pool.SimpleConnectionPool(1, 5, _get_database_url())
+    return _pool
+
+@contextmanager
+def _get_conn():
+    pool = _get_pool()
+    conn = pool.getconn()
     try:
-        import streamlit as st
-        _DATABASE_URL = st.secrets.get("DATABASE_URL")
+        yield conn
+        conn.commit()
     except Exception:
-        pass
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
-# ── Backend selection ────────────────────────────────────────────────────────
-# DATABASE_URL set   →  PostgreSQL via Supabase (production)
-# DATABASE_URL unset →  SQLite (local / Streamlit Cloud without secrets)
+def _fetchone(cur) -> dict | None:
+    row = cur.fetchone()
+    if row is None:
+        return None
+    return dict(zip([d[0] for d in cur.description], row))
 
-if _DATABASE_URL:
-    import psycopg2
-    import psycopg2.pool
+def _fetchall(cur) -> list[dict]:
+    cols = [d[0] for d in cur.description]
+    return [dict(zip(cols, row)) for row in cur.fetchall()]
 
-    _pool = None  # created lazily on first use — avoids crash at import time
+def _query(conn, sql, params=()):
+    cur = conn.cursor()
+    cur.execute(sql, params)
+    return cur
 
-    def _get_pool():
-        global _pool
-        if _pool is None:
-            _pool = psycopg2.pool.SimpleConnectionPool(1, 5, _DATABASE_URL)
-        return _pool
-
-    @contextmanager
-    def _get_conn():
-        pool = _get_pool()
-        conn = pool.getconn()
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            pool.putconn(conn)
-
-    def _fetchone(cur) -> dict | None:
-        row = cur.fetchone()
-        if row is None:
-            return None
-        return dict(zip([d[0] for d in cur.description], row))
-
-    def _fetchall(cur) -> list[dict]:
-        cols = [d[0] for d in cur.description]
-        return [dict(zip(cols, row)) for row in cur.fetchall()]
-
-    def _init_db():
-        with _get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS users (
-                        id       SERIAL PRIMARY KEY,
-                        username TEXT NOT NULL UNIQUE,
-                        email    TEXT NOT NULL UNIQUE,
-                        password TEXT NOT NULL,
-                        role     TEXT NOT NULL DEFAULT 'viewer'
-                    )
-                """)
-
-    def _query(conn, sql, params=()):
-        cur = conn.cursor()
-        cur.execute(sql, params)
-        return cur
-
-    _PH = "%s"
-
-else:
-    import sqlite3
-
-    # Use temp dir so it works on read-only filesystems (e.g. Streamlit Cloud)
-    _DB_PATH = os.environ.get(
-        "DB_PATH",
-        os.path.join(tempfile.gettempdir(), "users.db"),
-    )
-
-    @contextmanager
-    def _get_conn():
-        conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-
-    def _fetchone(cur) -> dict | None:
-        row = cur.fetchone()
-        return dict(row) if row else None
-
-    def _fetchall(cur) -> list[dict]:
-        return [dict(r) for r in cur.fetchall()]
-
-    def _init_db():
-        with _get_conn() as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT    NOT NULL UNIQUE,
-                    email    TEXT    NOT NULL UNIQUE,
-                    password TEXT    NOT NULL,
-                    role     TEXT    NOT NULL DEFAULT 'viewer'
-                )
-            """)
-
-    def _query(conn, sql, params=()):
-        return conn.execute(sql, params)
-
-    _PH = "?"
-
+_PH = "%s"
 
 try:
-    _init_db()
+    with _get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id       SERIAL PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    email    TEXT NOT NULL UNIQUE,
+                    password TEXT NOT NULL,
+                    role     TEXT NOT NULL DEFAULT 'viewer'
+                )
+            """)
 except Exception as e:
     logging.error(f"Database init failed: {e}")
 
