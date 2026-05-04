@@ -566,6 +566,8 @@ def analyze_data(df: pd.DataFrame) -> dict:
         ch = valid_clients.groupby("Account Name (Ticket)").apply(_ch_agg).reset_index()
         ch.rename(columns={"Account Name (Ticket)": "Client"}, inplace=True)
         ch = ch[["Client", "Total", "SLA Violations", "SLA Rate %", "Escalated", "Escalation Rate %", "Avg Response (min)"]].sort_values("Total", ascending=False)
+        for col in ["Total", "SLA Violations", "Escalated", "Avg Response (min)"]:
+            ch[col] = ch[col].astype(int)
         client_health = ch
     else:
         client_health = pd.DataFrame()
