@@ -395,7 +395,7 @@ if file_to_process is not None:
         tab1, tab2, tab3, tab4 = st.tabs(["📊 SLA Summary", "🎯 Priority", "🏷️ Types", "🚨 Alarms"])
         
         with tab1:
-            sla_df = pd.DataFrame({"Metric": ["Total Tickets", "SLA Violations", "Escalated Tickets", "Resolved Tickets", "Avg Per Day", "Resolution Rate"], "Value": [f"{analysis['total_tickets']:,}", f"{analysis['sla_violated']:,}", f"{analysis['escalated_count']:,}", f"{analysis['resolved_count']:,}", f"{analysis['avg_per_day']:.0f}", f"{analysis['sla_rate']:.1f}%"]})
+            sla_df = pd.DataFrame({"Metric": ["Total Tickets", "SLA Violations", "Escalated Tickets", "Resolved Tickets", "Avg Per Day", "Resolution Rate"], "Value": [f"{analysis['total_tickets']:,}", f"{analysis['sla_violated']:,}", f"{analysis['escalated_count']:,}", f"{analysis['resolved_count']:,}", f"{analysis['avg_per_day']:.0f}", f"{analysis['resolution_rate']:.1f}%"]})
             st.dataframe(sla_df, use_container_width=True, hide_index=True)
         
         with tab2:
