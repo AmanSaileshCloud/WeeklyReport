@@ -24,8 +24,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from page.login_page import login_page
 from page.signup_page import signup_page
 from utils.init_session import init_session, reset_session
-from utils.db_handler import get_users, set_user_role
-import json
+from utils.db_handler import get_users, set_user_role, load_snapshot, save_snapshot
 from generate_weekly_report import (
     load_data, prepare_weekly_data, analyze_data, generate_graphs,
     generate_executive_summary,
@@ -33,28 +32,6 @@ from generate_weekly_report import (
     NEXT_WEEK_FOCUS,
 )
 
-_SNAPSHOT_PATH = os.path.join(os.path.dirname(__file__), "reports", "previous_snapshot.json")
-
-def _load_snapshot() -> dict:
-    if os.path.exists(_SNAPSHOT_PATH):
-        with open(_SNAPSHOT_PATH) as f:
-            return json.load(f)
-    return {}
-
-def _save_snapshot(analysis: dict, start_str: str, end_str: str):
-    snapshot = {
-        "date_start":       start_str,
-        "date_end":         end_str,
-        "total":            analysis["total_tickets"],
-        "sla_violated":     analysis["sla_violated"],
-        "sla_rate":         analysis["sla_rate"],
-        "resolution_rate":  analysis["resolution_rate"],
-        "escalation_rate":  analysis["escalation_rate"],
-        "resolved_count":   analysis["resolved_count"],
-        "escalated_count":  analysis["escalated_count"],
-    }
-    with open(_SNAPSHOT_PATH, "w") as f:
-        json.dump(snapshot, f)
 
 st.set_page_config(page_title="Weekly Tickets Report", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 
@@ -161,11 +138,20 @@ if file_to_process is not None:
         end_str   = str(actual_end.date())
 
         # Load previous snapshot for WoW comparison
-        prev = _load_snapshot()
+        prev = load_snapshot()
 
         # Save snapshot only when a new (different) report is loaded
         if prev.get("date_end") != end_str:
-            _save_snapshot(analysis, start_str, end_str)
+            save_snapshot(
+                date_start=start_str, date_end=end_str,
+                total=analysis["total_tickets"],
+                sla_violated=analysis["sla_violated"],
+                sla_rate=analysis["sla_rate"],
+                resolution_rate=analysis["resolution_rate"],
+                escalation_rate=analysis["escalation_rate"],
+                resolved_count=analysis["resolved_count"],
+                escalated_count=analysis["escalated_count"],
+            )
         period_str   = f"{actual_start.strftime('%d %b %Y')} – {actual_end.strftime('%d %b %Y')}"
         actual_days  = (actual_end - actual_start).days + 1
         today        = datetime.now()

@@ -63,6 +63,21 @@ try:
                     role     TEXT NOT NULL DEFAULT 'viewer'
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS report_snapshots (
+                    id               SERIAL PRIMARY KEY,
+                    date_start       TEXT NOT NULL,
+                    date_end         TEXT NOT NULL UNIQUE,
+                    total            INTEGER,
+                    sla_violated     INTEGER,
+                    sla_rate         REAL,
+                    resolution_rate  REAL,
+                    escalation_rate  REAL,
+                    resolved_count   INTEGER,
+                    escalated_count  INTEGER,
+                    saved_at         TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
 except Exception as e:
     logging.error(f"Database init failed: {e}")
 
@@ -111,3 +126,31 @@ def set_user_role(email: str, role: str):
         raise ValueError("Role must be 'admin' or 'viewer'")
     with _get_conn() as conn:
         _query(conn, f"UPDATE users SET role = {_PH} WHERE LOWER(email) = LOWER({_PH})", (role, email))
+
+
+def load_snapshot() -> dict:
+    with _get_conn() as conn:
+        cur = _query(conn, "SELECT * FROM report_snapshots ORDER BY saved_at DESC LIMIT 1")
+        row = _fetchone(cur)
+        return row if row else {}
+
+
+def save_snapshot(date_start: str, date_end: str, total: int, sla_violated: int,
+                  sla_rate: float, resolution_rate: float, escalation_rate: float,
+                  resolved_count: int, escalated_count: int):
+    with _get_conn() as conn:
+        _query(conn, f"""
+            INSERT INTO report_snapshots
+                (date_start, date_end, total, sla_violated, sla_rate, resolution_rate, escalation_rate, resolved_count, escalated_count)
+            VALUES ({_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH},{_PH})
+            ON CONFLICT (date_end) DO UPDATE SET
+                total           = EXCLUDED.total,
+                sla_violated    = EXCLUDED.sla_violated,
+                sla_rate        = EXCLUDED.sla_rate,
+                resolution_rate = EXCLUDED.resolution_rate,
+                escalation_rate = EXCLUDED.escalation_rate,
+                resolved_count  = EXCLUDED.resolved_count,
+                escalated_count = EXCLUDED.escalated_count,
+                saved_at        = NOW()
+        """, (date_start, date_end, total, sla_violated, sla_rate, resolution_rate,
+              escalation_rate, resolved_count, escalated_count))
