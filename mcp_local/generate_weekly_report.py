@@ -550,16 +550,21 @@ def analyze_data(df: pd.DataFrame) -> dict:
     # Client Health Scorecard
     valid_clients = df[~df["Account Name (Ticket)"].isin(['-', '', 'nan', 'NaN'])].copy()
     if not valid_clients.empty:
-        ch = valid_clients.groupby("Account Name (Ticket)").agg(
-            Total=("Ticket Id", "count"),
-            SLA_Violations=("SLA Violation Type", lambda x: x.isin(["Response Violation", "Resolution Violation"]).sum()),
-            Escalated=("Is Escalated", lambda x: (x.astype(str).str.upper() == "TRUE").sum()),
-            Avg_Response=("First Response Time (Minutes)", "mean"),
-        ).reset_index()
-        ch.columns = ["Client", "Total", "SLA Violations", "Escalated", "Avg Response (min)"]
-        ch["SLA Rate %"]        = (ch["SLA Violations"] / ch["Total"] * 100).round(1)
-        ch["Escalation Rate %"] = (ch["Escalated"] / ch["Total"] * 100).round(1)
-        ch["Avg Response (min)"] = ch["Avg Response (min)"].round(0).fillna(0).astype(int)
+        def _ch_agg(g):
+            total      = g["Ticket Id"].nunique()
+            sla_viols  = g.loc[g["SLA Violation Type"].isin(["Response Violation", "Resolution Violation"]), "Ticket Id"].nunique()
+            escalated  = g.loc[g["Is Escalated"].astype(str).str.upper() == "TRUE", "Ticket Id"].nunique()
+            avg_resp   = g["First Response Time (Minutes)"].mean()
+            return pd.Series({
+                "Total":              total,
+                "SLA Violations":     sla_viols,
+                "SLA Rate %":         round(sla_viols / total * 100, 1) if total else 0.0,
+                "Escalated":          escalated,
+                "Escalation Rate %":  round(escalated / total * 100, 1) if total else 0.0,
+                "Avg Response (min)": int(round(avg_resp)) if pd.notna(avg_resp) else 0,
+            })
+        ch = valid_clients.groupby("Account Name (Ticket)").apply(_ch_agg).reset_index()
+        ch.rename(columns={"Account Name (Ticket)": "Client"}, inplace=True)
         ch = ch[["Client", "Total", "SLA Violations", "SLA Rate %", "Escalated", "Escalation Rate %", "Avg Response (min)"]].sort_values("Total", ascending=False)
         client_health = ch
     else:
