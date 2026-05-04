@@ -452,8 +452,8 @@ def analyze_data(df: pd.DataFrame) -> dict:
                 "Subject": lambda x: x.iloc[0]  # Get the subject for reference
             })
             .reset_index()
-            .head(5)
         )
+        top_escalated_issues = top_escalated_issues[top_escalated_issues["Escalation_Type"] != "Other"].head(5)
         top_escalated_issues.columns = ["Issue", "Team", "Type", "Subject"]
         # Keep only needed columns
         top_escalated_issues = top_escalated_issues[["Issue", "Team", "Type"]]
