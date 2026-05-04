@@ -535,7 +535,7 @@ if file_to_process is not None:
                     return "background-color: rgba(74,222,128,0.2)"
                 return ""
             styled_ch = client_health.style\
-                .format({"Total": "{:d}", "SLA Violations": "{:d}", "Escalated": "{:d}", "SLA Rate %": "{:.1f}%", "Escalation Rate %": "{:.1f}%", "Avg Response (min)": "{:d}"})\
+                .format({"Total": "{:.0f}", "SLA Violations": "{:.0f}", "Escalated": "{:.0f}", "SLA Rate %": "{:.1f}%", "Escalation Rate %": "{:.1f}%", "Avg Response (min)": "{:.0f}"})\
                 .map(lambda v: _ch_color(v, "SLA Rate %"), subset=["SLA Rate %"])\
                 .map(lambda v: _ch_color(v, "Escalation Rate %"), subset=["Escalation Rate %"])
             st.dataframe(styled_ch, use_container_width=True, hide_index=True)
