@@ -11,8 +11,12 @@ import plotly.graph_objects as go
 import plotly.express as px
 
 # Inject Streamlit secrets into env vars before any db imports
-if "DATABASE_URL" not in os.environ and "DATABASE_URL" in st.secrets:
-    os.environ["DATABASE_URL"] = st.secrets["DATABASE_URL"]
+if "DATABASE_URL" not in os.environ:
+    if "DATABASE_URL" in st.secrets:
+        os.environ["DATABASE_URL"] = st.secrets["DATABASE_URL"]
+    else:
+        st.error("DATABASE_URL is missing from Streamlit secrets. Go to App Settings → Secrets and add it.")
+        st.stop()
 
 # Make page/ and utils/ importable
 sys.path.insert(0, os.path.dirname(__file__))
