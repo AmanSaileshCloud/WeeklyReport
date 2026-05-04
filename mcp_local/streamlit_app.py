@@ -91,15 +91,15 @@ with st.sidebar:
         company_name = st.text_input("🏢 Company Name", _cfg.get("company_name", "Workmates"))
     else:
         company_name = _cfg.get("company_name", "Workmates")
-    st.markdown("---\n### 📂 Data Source")
     default_csv_path = os.path.join(os.path.dirname(__file__), "reports", "zoho_weekly_report.csv")
     has_default = os.path.exists(default_csv_path)
-    use_default = st.checkbox("📁 Use default CSV file", True) if has_default else False
     if _is_admin:
+        st.markdown("---\n### 📂 Data Source")
+        use_default = st.checkbox("📁 Use default CSV file", True) if has_default else False
         uploaded_file = st.file_uploader("📤 Upload a CSV file", type=["csv"])
     else:
+        use_default = has_default
         uploaded_file = None
-        st.caption("📋 Viewers can only access the default report. Contact an admin to upload data.")
     st.markdown("---\n<div style='text-align: center; padding: 20px; color: #6B7280;'><p style='font-size: 12px;'><strong>Managed Service</strong><br>Weekly Tickets Analytics</p></div>", unsafe_allow_html=True)
 
 file_to_process = None
