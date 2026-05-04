@@ -30,7 +30,7 @@ from generate_weekly_report import (
     load_data, prepare_weekly_data, analyze_data, generate_graphs, generate_pdf,
     generate_executive_summary,
     _load_config, _resolve_path, GRAPH_DIR, LOGO_PATH, COMPANY_NAME, DAYS_RANGE,
-    NEXT_WEEK_FOCUS, BUSINESS_RISKS, TICKET_CATEGORIES, REQUIRED_COLUMNS, STATUS_MASTER,
+    NEXT_WEEK_FOCUS,
 )
 
 _SNAPSHOT_PATH = os.path.join(os.path.dirname(__file__), "reports", "previous_snapshot.json")
@@ -423,8 +423,26 @@ if file_to_process is not None:
                 st.markdown(f"**{i}.** {item}")
         with col2:
             st.markdown("<div class='section-header'>⚠️ Business Risks</div>", unsafe_allow_html=True)
-            if BUSINESS_RISKS:
-                st.dataframe(pd.DataFrame(BUSINESS_RISKS), use_container_width=True, hide_index=True)
+            dynamic_risks = []
+            sla_rate      = analysis.get("sla_rate", 0)
+            esc_rate      = analysis.get("escalation_rate", 0)
+            open_aging    = analysis.get("open_tickets_aging", pd.DataFrame())
+            aging_count   = len(open_aging) if not open_aging.empty else 0
+            if sla_rate > 15:
+                dynamic_risks.append({"Risk": "SLA Breaches Critical", "Level": "🔴 Critical", "Description": f"{sla_rate:.1f}% of tickets breached SLA — immediate action required."})
+            elif sla_rate > 5:
+                dynamic_risks.append({"Risk": "SLA Breaches Elevated", "Level": "🟡 Medium", "Description": f"{sla_rate:.1f}% SLA breach rate is above the 5% threshold."})
+            if esc_rate > 5:
+                dynamic_risks.append({"Risk": "High Escalation Rate", "Level": "🔴 Critical", "Description": f"{esc_rate:.1f}% of tickets were escalated this week."})
+            elif esc_rate > 2:
+                dynamic_risks.append({"Risk": "Elevated Escalations", "Level": "🟡 Medium", "Description": f"{esc_rate:.1f}% escalation rate is above the 2% acceptable limit."})
+            if aging_count > 20:
+                dynamic_risks.append({"Risk": "Aging Ticket Backlog", "Level": "🔴 High", "Description": f"{aging_count} tickets remain unresolved and are accumulating in the backlog."})
+            elif aging_count > 5:
+                dynamic_risks.append({"Risk": "Open Ticket Backlog", "Level": "🟡 Medium", "Description": f"{aging_count} tickets are still open and may breach SLA if unresolved."})
+            if not dynamic_risks:
+                dynamic_risks.append({"Risk": "No Major Risks", "Level": "🟢 Low", "Description": "All key metrics are within acceptable thresholds."})
+            st.dataframe(pd.DataFrame(dynamic_risks), use_container_width=True, hide_index=True)
         
         st.markdown("---\n<div class='section-header'>📅 Forecast — Next 7 Days</div>", unsafe_allow_html=True)
         nwf = analysis.get("next_week_forecast", {})
