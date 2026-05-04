@@ -565,6 +565,7 @@ if file_to_process is not None:
         open_aging = analysis.get("open_tickets_aging", pd.DataFrame())
         if not open_aging.empty:
             st.markdown(f"<div class='warning-box'>📋 <strong>{len(open_aging)} tickets</strong> are currently open.</div>", unsafe_allow_html=True)
+            st.caption("🔴 Red = ticket older than 3 days &nbsp;|&nbsp; 🟡 Yellow = ticket older than 2 days")
             def _age_row_color(row):
                 age = str(row.get("Ticket Age", ""))
                 d = 0
