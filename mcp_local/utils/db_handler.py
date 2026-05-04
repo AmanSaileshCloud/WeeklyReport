@@ -152,5 +152,5 @@ def save_snapshot(date_start: str, date_end: str, total: int, sla_violated: int,
                 resolved_count  = EXCLUDED.resolved_count,
                 escalated_count = EXCLUDED.escalated_count,
                 saved_at        = NOW()
-        """, (date_start, date_end, total, sla_violated, sla_rate, resolution_rate,
-              escalation_rate, resolved_count, escalated_count))
+        """, (str(date_start), str(date_end), int(total), int(sla_violated), float(sla_rate),
+              float(resolution_rate), float(escalation_rate), int(resolved_count), int(escalated_count)))
