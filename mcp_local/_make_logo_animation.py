@@ -34,24 +34,48 @@ def ease_in_out(t: float) -> float:
     return 0.5 - 0.5 * math.cos(math.pi * t)
 
 
+def load_transparent_logo(path: str) -> Image.Image:
+    """Open logo and strip near-black background → transparent.
+
+    Uses HSV value (max of RGB) as inverse alpha so anti-aliased edges fade
+    smoothly instead of leaving a halo. Crops to the visible bounding box.
+    """
+    import numpy as np
+    img = Image.open(path).convert("RGBA")
+    arr = np.array(img)
+    rgb = arr[..., :3].astype(np.int32)
+    val = rgb.max(axis=-1)  # V in HSV
+    THRESH = 35
+    KEEP = 90
+    alpha = np.clip((val - THRESH) * 255 // (KEEP - THRESH), 0, 255).astype(np.uint8)
+    # Combine with any existing alpha
+    arr[..., 3] = np.minimum(arr[..., 3], alpha)
+    out = Image.fromarray(arr, "RGBA")
+    bbox = out.getbbox()
+    return out.crop(bbox) if bbox else out
+
+
 def build_gif() -> None:
-    src = Image.open(SRC).convert("RGBA")
+    """Build looping GIF with binary transparency (GIF can't do partial alpha)."""
+    src = load_transparent_logo(SRC)
     s = max(src.size)
-    sq = Image.new("RGBA", (s, s), (0, 0, 0, 255))
+    sq = Image.new("RGBA", (s, s), (0, 0, 0, 0))
     sq.paste(src, ((s - src.size[0]) // 2, (s - src.size[1]) // 2), src)
     base = sq.resize((int(CANVAS * 0.85), int(CANVAS * 0.85)), Image.LANCZOS)
 
-    # Global palette: build from a reference frame at max-scale (richest colors)
-    ref_canvas = Image.new("RGB", (CANVAS, CANVAS), (0, 0, 0))
+    # Reserved background color for GIF transparency key (magenta — not in logo)
+    BG_KEY = (255, 0, 255)
+
+    # Global palette built from a flattened max-scale frame
+    ref_canvas = Image.new("RGB", (CANVAS, CANVAS), BG_KEY)
     ref_w = int(base.size[0] * SCALE_MAX)
     ref_h = int(base.size[1] * SCALE_MAX)
     ref_scaled = base.resize((ref_w, ref_h), Image.LANCZOS)
     ref_canvas.paste(ref_scaled, ((CANVAS - ref_w) // 2, (CANVAS - ref_h) // 2), ref_scaled)
-    palette_img = ref_canvas.convert("P", palette=Image.ADAPTIVE, colors=256)
+    palette_img = ref_canvas.convert("P", palette=Image.ADAPTIVE, colors=255)
 
     frames: list[Image.Image] = []
     for i in range(FRAMES):
-        # Triangle wave 0->1->0 over the loop (perfect loop)
         t = i / FRAMES
         tri = 1 - abs(2 * t - 1)
         eased = ease_in_out(tri)
@@ -65,11 +89,19 @@ def build_gif() -> None:
         a = scaled.split()[3].point(lambda v, o=opacity: int(v * o))
         scaled.putalpha(a)
 
-        canvas = Image.new("RGBA", (CANVAS, CANVAS), (0, 0, 0, 255))
+        canvas = Image.new("RGBA", (CANVAS, CANVAS), BG_KEY + (255,))
         canvas.paste(scaled, ((CANVAS - w) // 2, (CANVAS - h) // 2), scaled)
         rgb = canvas.convert("RGB")
-        # Quantize against the SAME global palette so colors stay consistent
-        frames.append(rgb.quantize(palette=palette_img, dither=Image.Dither.FLOYDSTEINBERG))
+        quant = rgb.quantize(palette=palette_img, dither=Image.Dither.NONE)
+        frames.append(quant)
+
+    # Find palette index for BG_KEY (transparency)
+    pal = frames[0].getpalette()
+    transparent_idx = 0
+    for idx in range(0, len(pal), 3):
+        if pal[idx] == BG_KEY[0] and pal[idx + 1] == BG_KEY[1] and pal[idx + 2] == BG_KEY[2]:
+            transparent_idx = idx // 3
+            break
 
     frames[0].save(
         GIF_OUT,
@@ -79,12 +111,13 @@ def build_gif() -> None:
         loop=0,
         disposal=2,
         optimize=True,
+        transparency=transparent_idx,
     )
     print(f"[gif] {GIF_OUT}  ({os.path.getsize(GIF_OUT) // 1024} KB, {FRAMES} frames)")
 
 
 def build_lottie() -> None:
-    src = Image.open(SRC).convert("RGBA")
+    src = load_transparent_logo(SRC)
     # Downscale + re-encode PNG, then embed as base64 (browser-rendered, no Cairo)
     src.thumbnail((EMBED_MAX_PX, EMBED_MAX_PX), Image.LANCZOS)
     buf = io.BytesIO()
