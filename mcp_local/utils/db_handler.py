@@ -8,14 +8,8 @@ from contextlib import contextmanager
 def _get_database_url() -> str:
     url = os.environ.get("DATABASE_URL")
     if not url:
-        try:
-            import streamlit as st
-            url = st.secrets.get("DATABASE_URL")
-        except Exception:
-            pass
-    if not url:
         raise RuntimeError(
-            "DATABASE_URL is not set. Add it to your environment variables or Streamlit secrets."
+            "DATABASE_URL is not set. Add it to your Streamlit secrets."
         )
     return url
 
