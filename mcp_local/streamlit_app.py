@@ -571,8 +571,8 @@ if file_to_process is not None:
                 import re as _re
                 dm = _re.search(r'(\d+)d', age)
                 if dm: d = int(dm.group(1))
-                if d >= 14:   return ["background-color: rgba(248,113,113,0.25)"] * len(row)
-                elif d >= 7:  return ["background-color: rgba(251,191,36,0.2)"] * len(row)
+                if d >= 3:   return ["background-color: rgba(248,113,113,0.25)"] * len(row)
+                elif d >= 2:  return ["background-color: rgba(251,191,36,0.2)"] * len(row)
                 return [""] * len(row)
             styled_open = open_aging.style.apply(_age_row_color, axis=1)
             st.dataframe(styled_open, use_container_width=True, hide_index=True)
