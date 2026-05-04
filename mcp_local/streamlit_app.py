@@ -144,13 +144,13 @@ if file_to_process is not None:
         if prev.get("date_end") != end_str:
             save_snapshot(
                 date_start=start_str, date_end=end_str,
-                total=analysis["total_tickets"],
-                sla_violated=analysis["sla_violated"],
-                sla_rate=analysis["sla_rate"],
-                resolution_rate=analysis["resolution_rate"],
-                escalation_rate=analysis["escalation_rate"],
-                resolved_count=analysis["resolved_count"],
-                escalated_count=analysis["escalated_count"],
+                total=int(analysis["total_tickets"]),
+                sla_violated=int(analysis["sla_violated"]),
+                sla_rate=float(analysis["sla_rate"]),
+                resolution_rate=float(analysis["resolution_rate"]),
+                escalation_rate=float(analysis["escalation_rate"]),
+                resolved_count=int(analysis["resolved_count"]),
+                escalated_count=int(analysis["escalated_count"]),
             )
         period_str   = f"{actual_start.strftime('%d %b %Y')} – {actual_end.strftime('%d %b %Y')}"
         actual_days  = (actual_end - actual_start).days + 1
