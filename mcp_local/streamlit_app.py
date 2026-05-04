@@ -78,7 +78,20 @@ div[data-testid="stForm"] { background: #1A1F2E; border-radius: 16px; padding: 3
 _is_admin = st.session_state.get('role') == 'admin'
 
 with st.sidebar:
-    if os.path.exists(LOGO_PATH):
+    _logo_dir = os.path.dirname(LOGO_PATH)
+    _lottie_path = os.path.join(_logo_dir, "logo_pulse.json")
+    _gif_path = os.path.join(_logo_dir, "logo_pulse.gif")
+    if os.path.exists(_lottie_path):
+        try:
+            import json as _json
+            from streamlit_lottie import st_lottie
+            with open(_lottie_path, "r", encoding="utf-8") as _f:
+                st_lottie(_json.load(_f), height=120, loop=True, quality="high", key="sidebar_logo")
+        except ImportError:
+            st.image(_gif_path if os.path.exists(_gif_path) else LOGO_PATH, width=120)
+    elif os.path.exists(_gif_path):
+        st.image(_gif_path, width=120)
+    elif os.path.exists(LOGO_PATH):
         st.image(LOGO_PATH, width=120)
     role_badge = "🔴 Admin" if _is_admin else "🔵 Viewer"
     st.markdown(f"**👤 {st.session_state.get('name', '')}** &nbsp; `{role_badge}`")
