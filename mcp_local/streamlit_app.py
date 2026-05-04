@@ -27,7 +27,7 @@ from utils.init_session import init_session, reset_session
 from utils.db_handler import get_users, set_user_role
 import json
 from generate_weekly_report import (
-    load_data, prepare_weekly_data, analyze_data, generate_graphs, generate_pdf,
+    load_data, prepare_weekly_data, analyze_data, generate_graphs,
     generate_executive_summary,
     _load_config, _resolve_path, GRAPH_DIR, LOGO_PATH, COMPANY_NAME, DAYS_RANGE,
     NEXT_WEEK_FOCUS,
@@ -581,42 +581,15 @@ if file_to_process is not None:
             st.markdown("<div class='info-box'>✅ No open tickets.</div>", unsafe_allow_html=True)
 
         st.markdown("---\n<div class='section-header'>📥 Export Report</div>", unsafe_allow_html=True)
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 Generate PDF Report", use_container_width=True, key="pdf"):
-                with st.spinner("📄 Generating PDF (30-60 seconds)..."):
-                    tmp_path = None
-                    try:
-                        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-                            tmp_path = tmp.name
-                        generate_pdf(analysis, output_pdf=tmp_path)
-                        with open(tmp_path, "rb") as pdf_file:
-                            pdf_bytes = pdf_file.read()
-                        st.success("✅ PDF generated successfully!")
-                        st.download_button(
-                            label="⬇️ Download PDF Report",
-                            data=pdf_bytes,
-                            file_name=f"weekly_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True,
-                        )
-                    except Exception as e:
-                        st.error(f"❌ Error generating PDF. Please try again.")
-                        logging.exception(e)
-                    finally:
-                        if tmp_path and os.path.exists(tmp_path):
-                            os.remove(tmp_path)
-        
-        with col2:
-            if st.button("📊 Export as CSV", use_container_width=True, key="csv"):
-                try:
-                    csv_buffer = BytesIO()
-                    df.to_csv(csv_buffer, index=False)
-                    csv_buffer.seek(0)
-                    st.download_button(label="⬇️ Download CSV Data", data=csv_buffer.getvalue(), file_name=f"tickets_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", mime="text/csv", use_container_width=True)
-                    st.success("✅ CSV ready for download!")
-                except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
+        if st.button("📊 Export as CSV", use_container_width=True, key="csv"):
+            try:
+                csv_buffer = BytesIO()
+                df.to_csv(csv_buffer, index=False)
+                csv_buffer.seek(0)
+                st.download_button(label="⬇️ Download CSV Data", data=csv_buffer.getvalue(), file_name=f"tickets_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", mime="text/csv", use_container_width=True)
+                st.success("✅ CSV ready for download!")
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
     
     except Exception as e:
         st.error(f"❌ An error occurred: {str(e)}")
