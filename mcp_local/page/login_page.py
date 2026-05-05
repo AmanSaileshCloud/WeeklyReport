@@ -44,12 +44,15 @@ def login_page(guest_mode=False):
                     if not (email and password):
                         st.error("Please provide email and password")
                     elif authenticate_user(email, password):
+                        from utils.db_handler import create_session_token
                         user = get_user_by_email(email)
+                        token = create_session_token(email)
                         st.session_state['authenticated'] = True
                         st.session_state['page'] = 'app'
                         st.session_state['email'] = email
                         st.session_state['name'] = user.get('name', email.split('@')[0]) if user else email.split('@')[0]
                         st.session_state['role'] = user.get('role', 'viewer') if user else 'viewer'
+                        st.session_state['pending_token'] = token
                         st.rerun()
                     else:
                         st.error("Invalid login credentials")

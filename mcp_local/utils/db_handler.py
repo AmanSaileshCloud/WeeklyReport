@@ -1,9 +1,11 @@
 import os
+import uuid
 import logging
 import bcrypt
 import psycopg2
 import psycopg2.pool
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 
 def _get_database_url() -> str:
     url = os.environ.get("DATABASE_URL")
@@ -83,6 +85,14 @@ try:
                     id         SERIAL PRIMARY KEY,
                     data       BYTEA NOT NULL,
                     uploaded_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS session_tokens (
+                    token      TEXT PRIMARY KEY,
+                    email      TEXT NOT NULL,
+                    expires_at TIMESTAMPTZ NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
 except Exception as e:
@@ -179,3 +189,28 @@ def download_report_csv() -> bytes | None:
         if row is None:
             return None
         return bytes(row["data"])
+
+
+def create_session_token(email: str) -> str:
+    token = str(uuid.uuid4())
+    expires_at = datetime.utcnow() + timedelta(days=30)
+    with _get_conn() as conn:
+        _query(conn, f"DELETE FROM session_tokens WHERE email = {_PH}", (email,))
+        _query(conn, f"INSERT INTO session_tokens (token, email, expires_at) VALUES ({_PH},{_PH},{_PH})",
+               (token, email, expires_at))
+    return token
+
+
+def get_user_by_token(token: str) -> dict | None:
+    with _get_conn() as conn:
+        cur = _query(conn, f"""
+            SELECT u.* FROM users u
+            JOIN session_tokens st ON LOWER(u.email) = LOWER(st.email)
+            WHERE st.token = {_PH} AND st.expires_at > NOW()
+        """, (token,))
+        return _fetchone(cur)
+
+
+def delete_session_token(token: str) -> None:
+    with _get_conn() as conn:
+        _query(conn, f"DELETE FROM session_tokens WHERE token = {_PH}", (token,))

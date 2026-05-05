@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from page.login_page import login_page
 from page.signup_page import signup_page
 from utils.init_session import init_session, reset_session
-from utils.db_handler import get_users, set_user_role, load_snapshot, save_snapshot, upload_report_csv, download_report_csv
+from utils.db_handler import get_users, set_user_role, load_snapshot, save_snapshot, upload_report_csv, download_report_csv, create_session_token, get_user_by_token, delete_session_token
 from generate_weekly_report import (
     load_data, prepare_weekly_data, analyze_data, generate_graphs,
     generate_executive_summary,
@@ -36,7 +36,30 @@ from generate_weekly_report import (
 
 st.set_page_config(page_title="Weekly Tickets Report", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 
+import extra_streamlit_components as stx
+_cookie_mgr = stx.CookieManager(key="wm_cookies")
+
 init_session()
+
+# Set cookie after login (pending_token set by login_page)
+if st.session_state.get('pending_token'):
+    from datetime import timedelta
+    _cookie_mgr.set("wm_session", st.session_state['pending_token'],
+                    expires_at=datetime.now() + timedelta(days=30))
+    del st.session_state['pending_token']
+
+# Restore session from cookie if not authenticated
+if not st.session_state['authenticated']:
+    _token = _cookie_mgr.get("wm_session")
+    if _token:
+        _user = get_user_by_token(_token)
+        if _user:
+            st.session_state['authenticated'] = True
+            st.session_state['page'] = 'app'
+            st.session_state['email'] = _user['email']
+            st.session_state['name'] = _user.get('name', _user['email'].split('@')[0])
+            st.session_state['role'] = _user.get('role', 'viewer')
+            st.session_state['session_token'] = _token
 
 if not st.session_state['authenticated']:
     if st.session_state['page'] == 'signup':
@@ -100,6 +123,10 @@ with st.sidebar:
     role_badge = "🔴 Admin" if _is_admin else "🔵 Viewer"
     st.markdown(f"**👤 {st.session_state.get('name', '')}** &nbsp; `{role_badge}`")
     if st.button("Logout", use_container_width=True):
+        _tok = st.session_state.get('session_token')
+        if _tok:
+            delete_session_token(_tok)
+            _cookie_mgr.delete("wm_session")
         reset_session()
         st.rerun()
     st.markdown("### 📊 Dashboard Control\n---")
