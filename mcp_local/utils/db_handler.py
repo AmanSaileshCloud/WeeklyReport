@@ -135,9 +135,12 @@ def set_user_role(email: str, role: str):
         _query(conn, f"UPDATE users SET role = {_PH} WHERE LOWER(email) = LOWER({_PH})", (role, email))
 
 
-def load_snapshot() -> dict:
+def load_snapshot(exclude_date_end: str | None = None) -> dict:
     with _get_conn() as conn:
-        cur = _query(conn, "SELECT * FROM report_snapshots ORDER BY saved_at DESC LIMIT 1")
+        if exclude_date_end:
+            cur = _query(conn, f"SELECT * FROM report_snapshots WHERE date_end != {_PH} ORDER BY saved_at DESC LIMIT 1", (exclude_date_end,))
+        else:
+            cur = _query(conn, "SELECT * FROM report_snapshots ORDER BY saved_at DESC LIMIT 1")
         row = _fetchone(cur)
         return row if row else {}
 

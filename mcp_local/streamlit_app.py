@@ -165,12 +165,11 @@ if file_to_process is not None:
         start_str = str(actual_start.date())
         end_str   = str(actual_end.date())
 
-        # Load previous snapshot for WoW comparison
-        prev = load_snapshot()
+        # Load previous period snapshot for WoW comparison (exclude current period)
+        prev = load_snapshot(exclude_date_end=end_str)
 
-        # Save snapshot only when a new (different) report is loaded
-        if prev.get("date_end") != end_str:
-            save_snapshot(
+        # Always save/update the current period snapshot (idempotent)
+        save_snapshot(
                 date_start=start_str, date_end=end_str,
                 total=int(analysis["total_tickets"]),
                 sla_violated=int(analysis["sla_violated"]),
