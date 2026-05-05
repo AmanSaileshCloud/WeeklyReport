@@ -78,6 +78,13 @@ try:
                     saved_at         TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS report_csv (
+                    id         SERIAL PRIMARY KEY,
+                    data       BYTEA NOT NULL,
+                    uploaded_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
 except Exception as e:
     logging.error(f"Database init failed: {e}")
 
@@ -154,3 +161,18 @@ def save_snapshot(date_start: str, date_end: str, total: int, sla_violated: int,
                 saved_at        = NOW()
         """, (str(date_start), str(date_end), int(total), int(sla_violated), float(sla_rate),
               float(resolution_rate), float(escalation_rate), int(resolved_count), int(escalated_count)))
+
+
+def upload_report_csv(file_bytes: bytes) -> None:
+    with _get_conn() as conn:
+        _query(conn, "DELETE FROM report_csv")
+        _query(conn, f"INSERT INTO report_csv (data) VALUES ({_PH})", (psycopg2.Binary(file_bytes),))
+
+
+def download_report_csv() -> bytes | None:
+    with _get_conn() as conn:
+        cur = _query(conn, "SELECT data FROM report_csv ORDER BY uploaded_at DESC LIMIT 1")
+        row = _fetchone(cur)
+        if row is None:
+            return None
+        return bytes(row["data"])

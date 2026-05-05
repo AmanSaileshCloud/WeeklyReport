@@ -18,13 +18,14 @@ if "DATABASE_URL" not in os.environ:
         st.error("DATABASE_URL is missing from Streamlit secrets. Go to App Settings → Secrets and add it.")
         st.stop()
 
+
 # Make page/ and utils/ importable
 sys.path.insert(0, os.path.dirname(__file__))
 
 from page.login_page import login_page
 from page.signup_page import signup_page
 from utils.init_session import init_session, reset_session
-from utils.db_handler import get_users, set_user_role, load_snapshot, save_snapshot
+from utils.db_handler import get_users, set_user_role, load_snapshot, save_snapshot, upload_report_csv, download_report_csv
 from generate_weekly_report import (
     load_data, prepare_weekly_data, analyze_data, generate_graphs,
     generate_executive_summary,
@@ -117,11 +118,22 @@ with st.sidebar:
 
 file_to_process = None
 if uploaded_file is not None:
+    try:
+        upload_report_csv(uploaded_file.getbuffer())
+        st.sidebar.success("✅ Report uploaded and saved.")
+    except Exception as _e:
+        st.sidebar.warning(f"⚠️ Could not save to cloud: {_e}")
     with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp_file:
         tmp_file.write(uploaded_file.getbuffer())
         file_to_process = tmp_file.name
-elif use_default and has_default:
-    file_to_process = default_csv_path
+else:
+    _csv_bytes = download_report_csv()
+    if _csv_bytes is not None:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp_file:
+            tmp_file.write(_csv_bytes)
+            file_to_process = tmp_file.name
+    elif has_default:
+        file_to_process = default_csv_path
 
 st.markdown("<h1 style='margin: 10px 0; color: #FFFFFF;'>📊 Weekly Tickets Report</h1><p style='color: #9CA3AF; margin: 0;'>Analytics Dashboard • " + company_name + "</p>", unsafe_allow_html=True)
 
