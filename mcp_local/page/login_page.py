@@ -55,6 +55,7 @@ def login_page(guest_mode=False):
                             st.session_state['email']         = email
                             st.session_state['name']          = user.get('name', email.split('@')[0]) if user else email.split('@')[0]
                             st.session_state['role']          = user.get('role', 'viewer') if user else 'viewer'
+                            st.session_state['session_token'] = token
                             st.session_state['pending_token'] = token
                             st.rerun()
                         else:

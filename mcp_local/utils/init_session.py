@@ -32,6 +32,7 @@ def reset_session():
     st.session_state['email'] = ""
     st.session_state['password'] = ""
     st.session_state['confirm_logout'] = False
+    st.session_state['session_token']  = None
     
     for input_param in st.session_state['extra_input_params'].keys():
         if input_param not in st.session_state:
