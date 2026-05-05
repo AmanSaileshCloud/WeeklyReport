@@ -51,6 +51,8 @@ section[data-testid="stSidebar"] { background-color: #161B27; }
 section[data-testid="stSidebar"] img { mix-blend-mode: screen; }
 div[data-testid="stMetric"] { background: #1A1F2E; border-radius: 12px; padding: 16px; border-left: 3px solid #6C63FF; }
 #MainMenu, footer, header { visibility: hidden; }
+button[data-testid="collapsedControl"] { display: none; }
+section[data-testid="stSidebar"] > div:first-child button[kind="header"] { display: none; }
 h1, h2, h3 { color: #FFFFFF; font-weight: 500; }
 .kpi-card { background: linear-gradient(135deg, #1A1F2E 0%, #232A3F 100%); border-left: 4px solid #6C63FF; border-radius: 12px; padding: 20px; margin: 10px 0; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); transition: all 0.3s ease; }
 .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 4px 12px rgba(108, 99, 255, 0.2); }
