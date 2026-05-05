@@ -123,12 +123,22 @@ with st.sidebar:
     role_badge = "🔴 Admin" if _is_admin else "🔵 Viewer"
     st.markdown(f"**👤 {st.session_state.get('name', '')}** &nbsp; `{role_badge}`")
     if st.button("Logout", use_container_width=True):
-        _tok = st.session_state.get('session_token')
-        if _tok:
-            delete_session_token(_tok)
-            _cookie_mgr.delete("wm_session")
-        reset_session()
-        st.rerun()
+        st.session_state['confirm_logout'] = True
+    if st.session_state.get('confirm_logout'):
+        st.warning("Are you sure you want to log out?")
+        col_y, col_n = st.columns(2)
+        with col_y:
+            if st.button("Yes, logout", use_container_width=True):
+                _tok = st.session_state.get('session_token')
+                if _tok:
+                    delete_session_token(_tok)
+                    _cookie_mgr.delete("wm_session")
+                reset_session()
+                st.rerun()
+        with col_n:
+            if st.button("Cancel", use_container_width=True):
+                st.session_state['confirm_logout'] = False
+                st.rerun()
     st.markdown("### 📊 Dashboard Control\n---")
     _cfg = _load_config()
     if _is_admin:
@@ -144,6 +154,7 @@ with st.sidebar:
     else:
         use_default = has_default
         uploaded_file = None
+        st.caption("🔒 Data is managed by your admin.")
     st.markdown("---\n<div style='text-align: center; padding: 20px; color: #6B7280;'><p style='font-size: 12px;'><strong>Managed Service</strong><br>Weekly Tickets Analytics</p></div>", unsafe_allow_html=True)
 
 file_to_process = None
@@ -165,26 +176,17 @@ else:
     elif has_default:
         file_to_process = default_csv_path
 
-st.markdown("<h1 style='margin: 10px 0; color: #FFFFFF;'>📊 Weekly Tickets Report</h1><p style='color: #9CA3AF; margin: 0;'>Analytics Dashboard • " + company_name + "</p>", unsafe_allow_html=True)
+_src_label = "📤 Uploaded Report" if uploaded_file is not None else ("☁️ Cloud Report" if download_report_csv() is not None else "📁 Default CSV")
+st.markdown(f"<h1 style='margin: 10px 0; color: #FFFFFF;'>📊 Weekly Tickets Report</h1><p style='color: #9CA3AF; margin: 0;'>Analytics Dashboard • {company_name} &nbsp;<span style='background:#232A3F;border:1px solid #6C63FF;border-radius:12px;padding:2px 10px;font-size:12px;color:#A5B4FC;'>{_src_label}</span></p>", unsafe_allow_html=True)
 
 st.markdown("---")
 
 if file_to_process is not None:
     try:
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        status_text.text("📥 Loading data...")
-        progress_bar.progress(25)
-        df_raw = load_data(csv_path=file_to_process)
-        progress_bar.progress(50)
-        status_text.text("⚙️ Processing data...")
-        df = prepare_weekly_data(df_raw, days=90)
-        analysis = analyze_data(df)
-        progress_bar.progress(75)
-        status_text.text("🎨 Generating analytics...")
-        progress_bar.progress(100)
-        status_text.empty()
-        progress_bar.empty()
+        with st.spinner("📥 Loading and processing data..."):
+            df_raw   = load_data(csv_path=file_to_process)
+            df       = prepare_weekly_data(df_raw, days=90)
+            analysis = analyze_data(df)
         st.success("✅ Data loaded and processed successfully!", icon="✅")
 
         actual_start = df["Created Time (Ticket)"].min()
@@ -305,7 +307,7 @@ if file_to_process is not None:
                 trend_df = daily_data.copy()
                 trend_df['Date'] = pd.to_datetime(trend_df['Date'])
                 trend_df = trend_df.sort_values('Date')
-                fig = go.Figure(data=[go.Scatter(x=trend_df['Date'], y=trend_df['Count'], mode='lines+markers+text', line=dict(color='#6C63FF', width=2.5), marker=dict(color='#6C63FF', size=7), fill='tozeroy', fillcolor='rgba(108,99,255,0.15)', text=trend_df['Count'], textposition='top center', textfont=dict(color='white', size=10))])
+                fig = go.Figure(data=[go.Scatter(x=trend_df['Date'], y=trend_df['Count'], mode='lines+markers', line=dict(color='#6C63FF', width=2.5), marker=dict(color='#6C63FF', size=7), fill='tozeroy', fillcolor='rgba(108,99,255,0.15)', hovertemplate='%{x}<br>Tickets: %{y}<extra></extra>')])
                 fig.update_layout(template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', title=dict(text='Daily Ticket Trend', font=dict(color='white', size=15)), font=dict(color='rgba(255,255,255,0.6)'), xaxis=dict(gridcolor='rgba(255,255,255,0.05)'), yaxis=dict(gridcolor='rgba(255,255,255,0.07)', title='Tickets Created'), margin=dict(t=50, b=40, l=50, r=20), height=350)
                 st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
                 st.plotly_chart(fig, use_container_width=True)
@@ -375,7 +377,7 @@ if file_to_process is not None:
                 trend_df = esc_trend.copy()
                 trend_df['Date'] = pd.to_datetime(trend_df['Date'])
                 trend_df = trend_df.sort_values('Date')
-                fig = go.Figure(data=[go.Scatter(x=trend_df['Date'], y=trend_df['Escalations'], mode='lines+markers+text', line=dict(color='#F87171', width=2.5), marker=dict(color='#F87171', size=8), fill='tozeroy', fillcolor='rgba(248,113,113,0.15)', text=trend_df['Escalations'], textposition='top center', textfont=dict(color='white', size=10))])
+                fig = go.Figure(data=[go.Scatter(x=trend_df['Date'], y=trend_df['Escalations'], mode='lines+markers', line=dict(color='#F87171', width=2.5), marker=dict(color='#F87171', size=8), fill='tozeroy', fillcolor='rgba(248,113,113,0.15)', hovertemplate='%{x}<br>Escalations: %{y}<extra></extra>')])
                 fig.update_layout(template='plotly_dark', paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', title=dict(text='Escalation Trend', font=dict(color='white', size=15)), font=dict(color='rgba(255,255,255,0.6)'), xaxis=dict(gridcolor='rgba(255,255,255,0.05)'), yaxis=dict(gridcolor='rgba(255,255,255,0.07)', title='Escalations'), margin=dict(t=50, b=40, l=50, r=20), height=350)
                 st.markdown("<div class='chart-container'>", unsafe_allow_html=True)
                 st.plotly_chart(fig, use_container_width=True)
@@ -491,7 +493,9 @@ if file_to_process is not None:
             trend_color = "delta-negative" if nwf["trend"] == "up" else ("delta-positive" if nwf["trend"] == "down" else "")
             nw1, nw2, nw3, nw4 = st.columns(4)
             with nw1:
-                st.markdown(f"<div class='kpi-card'><div class='kpi-label'>Predicted Tickets</div><div class='kpi-value'>{nwf['total']:,}</div><div class='kpi-delta {trend_color}'>{trend_icon} Trend: {nwf['trend']}</div></div>", unsafe_allow_html=True)
+                _range_lo = int(nwf['total'] * 0.85)
+                _range_hi = int(nwf['total'] * 1.15)
+                st.markdown(f"<div class='kpi-card'><div class='kpi-label'>Predicted Tickets</div><div class='kpi-value'>{nwf['total']:,}</div><div class='kpi-delta {trend_color}'>{trend_icon} Trend: {nwf['trend']}</div><div style='font-size:11px;color:#6B7280;margin-top:4px;'>Est. range: {_range_lo:,} – {_range_hi:,}</div></div>", unsafe_allow_html=True)
             with nw2:
                 st.markdown(f"<div class='kpi-card danger'><div class='kpi-label'>Predicted SLA Breaches</div><div class='kpi-value'>{nwf['predicted_sla']:,}</div></div>", unsafe_allow_html=True)
             with nw3:
@@ -632,8 +636,8 @@ if file_to_process is not None:
                 st.error(f"❌ Error: {str(e)}")
     
     except Exception as e:
-        st.error(f"❌ An error occurred: {str(e)}")
-        st.exception(e)
+        logging.exception("Dashboard error: %s", e)
+        st.error("❌ Something went wrong while processing the report. Please try re-uploading the CSV or contact your admin.")
 
 else:
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -658,11 +662,23 @@ if _is_admin:
                 with col3:
                     if u['email'] != st.session_state.get('email'):
                         new_role = 'viewer' if current_role == 'admin' else 'admin'
-                        label = f"Demote to Viewer" if current_role == 'admin' else f"Promote to Admin"
+                        label    = "Demote to Viewer" if current_role == 'admin' else "Promote to Admin"
+                        confirm_key = f"confirm_role_{u['email']}"
                         if st.button(label, key=f"role_{u['email']}"):
-                            set_user_role(u['email'], new_role)
-                            st.success(f"Updated {u['email']} to {new_role}")
-                            st.rerun()
+                            st.session_state[confirm_key] = True
+                        if st.session_state.get(confirm_key):
+                            st.warning(f"Change **{u['email']}** to **{new_role}**?")
+                            cy, cn = st.columns(2)
+                            with cy:
+                                if st.button("Confirm", key=f"yes_{u['email']}"):
+                                    set_user_role(u['email'], new_role)
+                                    st.session_state.pop(confirm_key, None)
+                                    st.success(f"Updated {u['email']} to {new_role}")
+                                    st.rerun()
+                            with cn:
+                                if st.button("Cancel", key=f"no_{u['email']}"):
+                                    st.session_state.pop(confirm_key, None)
+                                    st.rerun()
                     else:
                         st.caption("(you)")
         else:
