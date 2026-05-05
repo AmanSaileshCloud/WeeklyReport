@@ -1,17 +1,14 @@
 import os
-import json
 import streamlit as st
 from utils.db_handler import authenticate_user, get_user_by_email
 import time
 
-_LOGO_PATH   = os.path.join(os.path.dirname(__file__), "..", "logo.png")
-_LOTTIE_PATH = os.path.join(os.path.dirname(__file__), "..", "logo_pulse.json")
+_LOGO_PATH = os.path.join(os.path.dirname(__file__), "..", "logo.png")
 
 def login_page(guest_mode=False):
     st.markdown("""
 <style>
 [data-testid='stImage'] img { mix-blend-mode: screen; }
-iframe { background-color: transparent !important; mix-blend-mode: screen; }
 [data-testid="stApp"] {
     display: flex !important;
     align-items: center !important;
@@ -34,12 +31,7 @@ iframe { background-color: transparent !important; mix-blend-mode: screen; }
             img_col, form_col = st.columns([4, 5])
 
             with img_col:
-                try:
-                    from streamlit_lottie import st_lottie
-                    with open(_LOTTIE_PATH, "r", encoding="utf-8") as _f:
-                        st_lottie(json.load(_f), height=220, loop=True, quality="high", key="login_logo")
-                except Exception:
-                    st.image(_LOGO_PATH, use_container_width=True)
+                st.image(_LOGO_PATH, use_container_width=True)
 
             with form_col:
                 st.markdown("## Login Page")
