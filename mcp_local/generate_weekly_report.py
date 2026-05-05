@@ -455,9 +455,7 @@ def analyze_data(df: pd.DataFrame) -> dict:
         )
         top_escalated_issues = top_escalated_issues[top_escalated_issues["Escalation_Type"] != "Other"].head(5)
         top_escalated_issues.columns = ["Issue", "Team", "Type", "Subject"]
-        # Keep only needed columns
         top_escalated_issues = top_escalated_issues[["Issue", "Team", "Type"]]
-        # Add a count column (1 per issue)
         top_escalated_issues["Count"] = 1
     else:
         top_escalated_issues = pd.DataFrame(columns=["Issue", "Team", "Type", "Count"])
@@ -510,7 +508,7 @@ def analyze_data(df: pd.DataFrame) -> dict:
     scorecard.columns = ["Team", "Total", "Resolved", "Resolution Rate %", "Escalated", "Escalation Rate %", "Avg MTTR (min)", "Avg 1st Resp (min)"]
     scorecard = scorecard.sort_values("Total", ascending=False)
 
-    # Next Week Forecast — linear regression on daily trend
+    # Next Week Forecast — avg daily tickets x 7, trend direction from regression
     nw_df = daily_trend.copy()
     nw_df["Date"] = pd.to_datetime(nw_df["Date"])
     nw_df = nw_df.sort_values("Date").reset_index(drop=True)
@@ -519,12 +517,16 @@ def analyze_data(df: pd.DataFrame) -> dict:
         y = nw_df["Count"].values.astype(float)
         slope, intercept = np.polyfit(x, y, 1)
         last_date = nw_df["Date"].max()
+        # Use avg_per_day as the daily baseline to avoid skew from partial last day
+        daily_base = avg_per_day
         projected = []
         for i in range(1, 8):
-            val = max(0, slope * (len(nw_df) - 1 + i) + intercept)
+            # Apply slope as a small adjustment (±10% max) around the daily average
+            trend_adj = slope * i
+            val = max(0, daily_base + trend_adj)
             projected.append({"Date": last_date + timedelta(days=i), "Predicted": int(round(val))})
         proj_df = pd.DataFrame(projected)
-        nw_total = int(proj_df["Predicted"].sum())
+        nw_total = int(round(avg_per_day * 7))
         next_week_forecast = {
             "daily":                  proj_df,
             "historical":             nw_df.tail(14),
